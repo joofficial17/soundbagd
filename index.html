@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soundbagd — Track, Rate &amp; Review Music</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html" class="active">Explore</a></li>
+      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"><!-- injected by app.js --></div>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero__eyebrow fade-up">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12-2c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/></svg>
+      The Social Network for Music Lovers
+    </div>
+    <h1 class="hero__title fade-up fade-up-1">
+      Track every album.<br><em>Rate every moment.</em>
+    </h1>
+    <p class="hero__sub fade-up fade-up-2">
+      Discover, rate, and review albums, singles &amp; EPs. Build your music diary, share your taste, and find your next obsession.
+    </p>
+    <div class="hero__cta fade-up fade-up-3">
+      <a href="#" class="btn btn--gold" onclick="event.preventDefault();openAuthModal('register')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Start Your Journey
+      </a>
+      <a href="#trending" class="btn btn--ghost">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+        Explore Albums
+      </a>
+    </div>
+
+    <!-- Stats (real zeros — no fake numbers) -->
+    <div class="stats-row fade-up fade-up-4" style="justify-content:center;margin-top:48px;padding-top:40px;border-top:1px solid var(--border)">
+      <div class="stat"><div class="stat__value" id="statAlbums">0</div><div class="stat__label">Albums Logged</div></div>
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+      <div class="stat"><div class="stat__value" id="statReviews">0</div><div class="stat__label">Reviews Written</div></div>
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+      <div class="stat"><div class="stat__value" id="statMembers">0</div><div class="stat__label">Members</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Trending ────────────────────────────────────────────── -->
+<section class="section" id="trending">
+  <div class="container">
+    <div class="section__header">
+      <h2 class="h4">🔥 Trending Right Now</h2>
+      <span class="text-xs muted" id="trendingSource">Loading from Apple Music Charts…</span>
+    </div>
+    <!-- Trending strip — populated by JS -->
+    <div class="trending-strip" id="trendingStrip">
+      <!-- 8 skeleton cards -->
+      <div style="min-width:160px;flex-shrink:0">${Array(8).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('</div><div style="min-width:160px;flex-shrink:0">')}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Main Grid ───────────────────────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:40px" class="main-grid">
+
+      <!-- Feed -->
+      <div>
+        <div class="section__header">
+          <h2 class="h4">💬 Recent Reviews</h2>
+          <a href="#" class="section__link" onclick="event.preventDefault();loadRecentReviews(50)">All Activity →</a>
+        </div>
+        <div class="feed" id="reviewFeed">
+          <div style="padding:40px 20px;text-align:center;color:var(--text-muted)">
+            <div style="font-size:2rem;margin-bottom:12px">🎵</div>
+            <div style="font-size:.9rem">No reviews yet — be the first!</div>
+            <button class="btn btn--gold btn--sm" style="margin-top:16px" onclick="openAuthModal('register')">Join &amp; Start Reviewing</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside>
+        <!-- Popular albums this week -->
+        <div style="margin-bottom:32px">
+          <div class="section__header" style="margin-bottom:16px">
+            <h2 class="h4">📅 Popular Right Now</h2>
+          </div>
+          <div id="popularList">
+            <!-- Populated by JS from trending data -->
+            <div style="color:var(--text-muted);font-size:.85rem;padding:12px 0">Loading charts…</div>
+          </div>
+        </div>
+
+        <!-- Browse by genre -->
+        <div>
+          <h2 class="h4" style="margin-bottom:14px">Browse by Genre</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:8px" id="genreTags">
+            <button class="tag tag--gold" onclick="filterGenre(this,'')">All</button>
+            <button class="tag" onclick="filterGenre(this,'Country')">Country</button>
+            <button class="tag" onclick="filterGenre(this,'Hip-Hop')">Hip-Hop</button>
+            <button class="tag" onclick="filterGenre(this,'Pop')">Pop</button>
+            <button class="tag" onclick="filterGenre(this,'R&B')">R&amp;B / Soul</button>
+            <button class="tag" onclick="filterGenre(this,'Rock')">Rock</button>
+            <button class="tag" onclick="filterGenre(this,'Jazz')">Jazz</button>
+            <button class="tag" onclick="filterGenre(this,'Electronic')">Electronic</button>
+            <button class="tag" onclick="filterGenre(this,'Indie')">Indie</button>
+            <button class="tag" onclick="filterGenre(this,'Folk')">Folk</button>
+            <button class="tag" onclick="filterGenre(this,'Latin')">Latin</button>
+            <button class="tag" onclick="filterGenre(this,'Classical')">Classical</button>
+            <button class="tag" onclick="filterGenre(this,'Metal')">Metal</button>
+            <button class="tag" onclick="filterGenre(this,'K-Pop')">K-Pop</button>
+          </div>
+          <!-- Genre results -->
+          <div id="genreResults" style="margin-top:20px;display:none">
+            <div class="grid-albums" id="genreGrid"></div>
+          </div>
+        </div>
+
+        <!-- Add via DSP link -->
+        <div style="margin-top:28px;padding:20px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-lg)">
+          <div style="font-size:1.2rem;margin-bottom:8px">🔗</div>
+          <div style="font-weight:600;margin-bottom:6px;font-size:.9rem">Can't find an album?</div>
+          <div class="text-sm muted" style="margin-bottom:14px;line-height:1.6">Import it from Spotify, Apple Music, TIDAL, YouTube Music, or Amazon.</div>
+          <button class="btn btn--ghost btn--sm" onclick="openDspModal()" style="width:100%;justify-content:center">
+            Import via Streaming Link
+          </button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ── New Releases ────────────────────────────────────────── -->
+<section class="section" style="background:var(--bg-card)">
+  <div class="container">
+    <div class="section__header">
+      <h2 class="h2">New <em class="serif" style="font-style:italic;color:var(--gold)">Releases</em></h2>
+      <a href="#trending" class="section__link">Browse All →</a>
+    </div>
+    <div class="grid-albums grid-albums--lg" id="newReleasesGrid">
+      <!-- Skeletons -->
+      ${Array(5).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('')}
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ─────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container--narrow">
+    <div style="text-align:center;padding:48px 32px;background:linear-gradient(135deg,var(--bg-card),var(--bg-raised));border:1px solid var(--border-md);border-radius:var(--radius-xl);box-shadow:var(--shadow-glow)">
+      <div style="font-size:2.5rem;margin-bottom:16px">🎧</div>
+      <h2 class="h2" style="margin-bottom:12px">Your music story<br><em class="serif" style="color:var(--gold)">starts here.</em></h2>
+      <p class="muted" style="margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
+        Create a free account to log every album you've heard, build your Top 5 lists, and share your taste.
+      </p>
+      <a href="#" class="btn btn--gold" onclick="event.preventDefault();openAuthModal('register')">
+        Create Your Free Account
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__logo">Soundbagd</div>
+    <div class="footer__links">
+      <a href="#">About</a><a href="#">Privacy</a><a href="#">Terms</a>
+    </div>
+    <div class="footer__copy">Music data from Apple iTunes · © 2025 Soundbagd</div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+let _allTrending = [];
+
+async function initPage() {
+  loadTrending();
+  loadRecentReviews();
+  loadSiteStats();
+}
+
+async function loadTrending() {
+  try {
+    const albums = await api.get('/api/music/trending');
+    _allTrending = albums;
+
+    // Trending strip
+    const strip = document.getElementById('trendingStrip');
+    strip.innerHTML = albums.map(a =>
+      `<div style="min-width:160px;flex-shrink:0">${albumCardHtml(a)}</div>`
+    ).join('');
+
+    // Popular sidebar (top 5)
+    const list = document.getElementById('popularList');
+    list.innerHTML = albums.slice(0, 5).map((a, i) => `
+      <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'" style="padding:10px 12px">
+        <div class="top5-item__num">${i + 1}</div>
+        <div class="top5-item__art"><img src="${escHtml(a.artwork)}" alt="" loading="lazy"></div>
+        <div class="top5-item__info">
+          <div class="top5-item__title">${escHtml(a.title)}</div>
+          <div class="top5-item__sub">${escHtml(a.artist)}</div>
+        </div>
+      </div>`).join('');
+
+    // New Releases grid (next 10 from trending)
+    const grid = document.getElementById('newReleasesGrid');
+    grid.innerHTML = albums.slice(0, 10).map(a => albumCardHtml(a)).join('');
+
+    document.getElementById('trendingSource').textContent = 'Apple Music Most Played';
+  } catch (err) {
+    document.getElementById('trendingStrip').innerHTML =
+      `<div style="color:var(--text-muted);padding:20px;font-size:.875rem">Could not load trending — is the server running at localhost:3000?</div>`;
+  }
+}
+
+async function loadRecentReviews(limit = 20) {
+  try {
+    const reviews = await api.get(`/api/reviews/recent?limit=${limit}`);
+    const feed = document.getElementById('reviewFeed');
+    if (!reviews.length) {
+      feed.innerHTML = `
+        <div style="padding:40px 20px;text-align:center;color:var(--text-muted)">
+          <div style="font-size:2rem;margin-bottom:12px">🎵</div>
+          <div style="font-size:.9rem">No reviews yet — be the first!</div>
+          <button class="btn btn--gold btn--sm" style="margin-top:16px" onclick="openAuthModal('register')">Join &amp; Start Reviewing</button>
+        </div>`;
+      return;
+    }
+    feed.innerHTML = reviews.map(r => reviewCardHtml(r)).join('');
+  } catch { /* server not running */ }
+}
+
+async function loadSiteStats() {
+  try {
+    const stats = await api.get('/api/stats');
+    document.getElementById('statMembers').textContent = stats.members.toLocaleString();
+    document.getElementById('statReviews').textContent = stats.reviews.toLocaleString();
+    document.getElementById('statAlbums').textContent  = stats.albums.toLocaleString();
+  } catch { /* server not running */ }
+}
+
+function filterGenre(btn, genre) {
+  document.querySelectorAll('#genreTags button').forEach(t => {
+    t.classList.remove('tag--gold'); t.classList.add('tag');
+  });
+  btn.classList.remove('tag'); btn.classList.add('tag--gold');
+
+  const resultsEl = document.getElementById('genreResults');
+  const gridEl    = document.getElementById('genreGrid');
+
+  if (!genre) {
+    resultsEl.style.display = 'none';
+    return;
+  }
+
+  resultsEl.style.display = '';
+  gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Searching…</div>';
+
+  api.get(`/api/music/search?q=${encodeURIComponent(genre)}&type=album&limit=12`)
+    .then(albums => {
+      gridEl.innerHTML = albums.map(a => albumCardHtml(a)).join('') ||
+        `<div style="color:var(--text-muted);font-size:.85rem">No results found.</div>`;
+    }).catch(() => {
+      gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Could not load results.</div>';
+    });
+}
+</script>
+</body>
+</html>

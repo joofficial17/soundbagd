@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"><!-- injected by app.js --></div>
+  </div>
+</nav>
+
+<!-- ── Profile Header ─────────────────────────────────────── -->
+<div class="profile-header">
+  <div class="container">
+    <div class="profile-header__inner" id="profileHeaderInner">
+      <!-- Loading state -->
+      <div style="width:100px;height:100px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div>
+      <div style="flex:1">
+        <div style="height:32px;width:200px;background:var(--bg-raised);border-radius:4px;margin-bottom:12px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:14px;width:140px;background:var(--bg-raised);border-radius:4px;animation:pulse 1.5s ease infinite"></div>
+      </div>
+    </div>
+
+    <!-- Profile Tabs -->
+    <div style="display:flex;gap:4px;margin-top:28px;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button class="profile-tab" data-tab="tab-reviews" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--gold);border-bottom:2px solid var(--gold);margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Reviews</button>
+      <button class="profile-tab" data-tab="tab-top-lists" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Top Lists</button>
+      <button class="profile-tab" data-tab="tab-diary" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Diary</button>
+      <button class="profile-tab" data-tab="tab-lists" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Lists</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Profile Content ────────────────────────────────────── -->
+<div class="container" style="padding-top:40px;padding-bottom:60px">
+  <div style="display:grid;grid-template-columns:1fr 300px;gap:40px">
+
+    <!-- Main content -->
+    <div>
+
+      <!-- REVIEWS TAB -->
+      <div id="tab-reviews">
+        <div class="section__header" style="margin-bottom:20px">
+          <h2 class="h4" id="reviewsTabTitle">Reviews</h2>
+        </div>
+        <div id="profileReviewsFeed">
+          <div style="padding:40px 20px;text-align:center;color:var(--text-muted);font-size:.9rem">
+            No reviews yet.
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP LISTS TAB -->
+      <div id="tab-top-lists" style="display:none">
+
+        <!-- Top 5 Albums -->
+        <div style="margin-bottom:40px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
+            <h2 class="h3">🏆 Top 5 Albums of All Time</h2>
+            <button id="editAlbumsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('albums')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+          </div>
+          <div class="top5-list" id="top5AlbumsList">
+            <div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No albums added yet.</div>
+          </div>
+        </div>
+
+        <!-- Top 5 Songs -->
+        <div style="margin-bottom:40px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
+            <h2 class="h3">🎵 Top 5 Songs of All Time</h2>
+            <button id="editSongsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('songs')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+          </div>
+          <div class="top5-list" id="top5SongsList">
+            <div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No songs added yet.</div>
+          </div>
+        </div>
+
+        <!-- Top 5 Artists -->
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
+            <h2 class="h3">🎤 Top 5 Artists of All Time</h2>
+            <button id="editArtistsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('artists')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+          </div>
+          <div class="top5-list" id="top5ArtistsList">
+            <div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No artists added yet.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- DIARY TAB -->
+      <div id="tab-diary" style="display:none">
+        <h2 class="h4" style="margin-bottom:20px">Music Diary</h2>
+        <div id="diaryFeed">
+          <div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">No diary entries yet.</div>
+        </div>
+      </div>
+
+      <!-- LISTS TAB -->
+      <div id="tab-lists" style="display:none">
+        <div class="section__header" style="margin-bottom:20px">
+          <h2 class="h4" id="listsTabTitle">Lists</h2>
+          <button id="createListBtn" class="btn btn--gold btn--sm" style="display:none" onclick="openCreateListModal()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            New List
+          </button>
+        </div>
+        <div id="listsContainer">
+          <div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">No lists yet.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sidebar -->
+    <aside>
+      <!-- Recently reviewed grid -->
+      <div id="recentlyGrid" style="margin-bottom:24px">
+        <h2 class="h4" style="margin-bottom:14px">Recently Reviewed</h2>
+        <div id="recentlyReviewedGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ── Create / Edit List Modal ───────────────────────────── -->
+<div class="modal-backdrop" id="createListModal">
+  <div class="modal" style="max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="font-family:'Playfair Display',serif" id="createListModalTitle">New List</h3>
+      <button class="modal__close" onclick="closeCreateListModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="margin-bottom:14px">
+      <label class="modal__label">List Title</label>
+      <input id="listTitleInput" type="text" maxlength="100" placeholder="e.g. Albums For On The Road"
+        style="width:100%;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 14px;color:var(--text);font-size:.9rem;outline:none;transition:var(--transition)"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''" onkeydown="if(event.key==='Enter')saveList()">
+    </div>
+    <div style="margin-bottom:20px">
+      <label class="modal__label">Description <span class="text-xs muted">(optional)</span></label>
+      <textarea id="listDescInput" maxlength="300" placeholder="What's this list about?"
+        style="width:100%;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 14px;color:var(--text);font-size:.9rem;outline:none;resize:vertical;min-height:80px;transition:var(--transition)"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''"></textarea>
+    </div>
+    <div id="createListError" style="display:none;color:var(--coral);font-size:.82rem;margin-bottom:12px"></div>
+    <div class="modal__footer">
+      <button class="btn btn--ghost" onclick="closeCreateListModal()">Cancel</button>
+      <button class="btn btn--gold" onclick="saveList()" id="saveListBtn">Create List</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Manage List Modal ────────────────────────────────────── -->
+<div class="modal-backdrop" id="manageListModal">
+  <div class="modal" style="max-width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h3 style="font-family:'Playfair Display',serif;font-size:1.3rem" id="manageListTitle">List</h3>
+      <button class="modal__close" onclick="document.getElementById('manageListModal').classList.remove('open');document.body.style.overflow=''">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="manageListDesc" class="text-sm muted" style="margin-bottom:16px"></div>
+
+    <!-- Search to add albums (own list only) -->
+    <div id="manageListAddSection" style="display:none;margin-bottom:16px">
+      <div style="position:relative">
+        <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-dim);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="listAddSearch" type="text" placeholder="Search albums to add…"
+          style="width:100%;background:var(--bg-raised);border:1px solid var(--border);border-radius:40px;padding:9px 14px 9px 36px;color:var(--text);font-size:.875rem;outline:none;transition:var(--transition)"
+          onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+      </div>
+      <div id="listAddResults" style="background:var(--bg-raised);border-radius:var(--radius-md);overflow:hidden;max-height:200px;overflow-y:auto;margin-top:6px;display:none"></div>
+    </div>
+
+    <!-- Albums in list -->
+    <div id="manageListItems" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+      <div style="color:var(--text-muted);font-size:.875rem;padding:16px 0;text-align:center">No albums yet — search above to add some.</div>
+    </div>
+
+    <div class="modal__footer" style="margin-top:16px">
+      <button class="btn btn--ghost" onclick="document.getElementById('manageListModal').classList.remove('open');document.body.style.overflow=''">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Top 5 Modal ────────────────────────────────────── -->
+<div class="modal-backdrop" id="editTop5Modal">
+  <div class="modal" style="max-width:500px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="font-family:'Playfair Display',serif" id="editTop5Title">Edit Top 5</h3>
+      <button class="modal__close" onclick="document.getElementById('editTop5Modal').classList.remove('open')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="text-sm muted" style="margin-bottom:16px;line-height:1.6" id="editTop5Hint">Search and select up to 5 items.</p>
+
+    <!-- Search -->
+    <div style="position:relative;margin-bottom:12px">
+      <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-dim);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="top5SearchInput" type="text" placeholder="Search…"
+        style="width:100%;background:var(--bg-raised);border:1px solid var(--border);border-radius:40px;padding:9px 14px 9px 36px;color:var(--text);font-size:.875rem;outline:none;transition:var(--transition)"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+    </div>
+    <div id="top5SearchResults" style="background:var(--bg-raised);border-radius:var(--radius-md);overflow:hidden;max-height:200px;overflow-y:auto;margin-bottom:16px;display:none"></div>
+
+    <!-- Selected entries -->
+    <div style="margin-bottom:16px">
+      <div class="text-xs muted" style="margin-bottom:8px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">Selected (drag to reorder)</div>
+      <div id="top5Selected" style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--text-dim);font-size:.85rem;padding:8px 0">Nothing selected yet</div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="top5Error" style="display:none;color:var(--coral);font-size:.82rem;margin-bottom:12px"></div>
+
+    <div class="modal__footer">
+      <button class="btn btn--ghost" onclick="document.getElementById('editTop5Modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn--gold" onclick="saveTop5()" id="saveTop5Btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__logo">Soundbagd</div>
+    <div class="footer__links"><a href="index.html">← Explore</a></div>
+    <div class="footer__copy">© 2025 Soundbagd</div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+let _profileUser = null;
+let _isOwnProfile = false;
+let _editTop5Type = null;
+let _top5Entries  = [];
+let _top5SearchTimeout;
+
+async function initPage() {
+  const params   = new URLSearchParams(location.search);
+  const username = params.get('u');
+  const myUser   = auth.getUser();
+
+  // If no ?u= param and logged in, show own profile
+  const target = username || myUser?.username;
+  if (!target) {
+    // Not logged in, no target — show join prompt
+    document.getElementById('profileHeaderInner').innerHTML = `
+      <div style="text-align:center;padding:40px 0;width:100%">
+        <div style="font-size:2rem;margin-bottom:16px">👤</div>
+        <h2 class="h2" style="margin-bottom:12px">Create your Soundbagd profile</h2>
+        <p class="muted" style="margin-bottom:24px">Track every album. Build your Top 5 lists. Share your taste.</p>
+        <button class="btn btn--gold" onclick="openAuthModal('register')">Join Free</button>
+        <button class="btn btn--ghost" style="margin-left:10px" onclick="openAuthModal('login')">Sign In</button>
+      </div>`;
+    return;
+  }
+
+  _isOwnProfile = myUser && myUser.username.toLowerCase() === target.toLowerCase();
+
+  try {
+    _profileUser = await api.get(`/api/users/${encodeURIComponent(target)}`);
+    renderProfileHeader(_profileUser);
+    loadProfileReviews(target);
+    loadTop5(target);
+    loadLists(target);
+
+    // Update edit buttons
+    if (_isOwnProfile) {
+      ['editAlbumsBtn','editSongsBtn','editArtistsBtn','createListBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
+    }
+
+    document.title = `${_profileUser.username} · Soundbagd`;
+  } catch (err) {
+    document.getElementById('profileHeaderInner').innerHTML = `
+      <div style="color:var(--coral);padding:20px">User not found.</div>`;
+  }
+}
+
+function renderProfileHeader(u) {
+  const myUser = auth.getUser();
+  const isMe   = myUser && myUser.username.toLowerCase() === u.username.toLowerCase();
+
+  document.getElementById('profileHeaderInner').innerHTML = `
+    <div class="avatar avatar--xl fade-up" style="background:${escHtml(u.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)')}">${escHtml(u.initials || u.username.slice(0,2).toUpperCase())}</div>
+    <div class="profile-header__info fade-up fade-up-1">
+      <div class="profile-header__name">
+        <h1 class="h2">${escHtml(u.username)}</h1>
+      </div>
+      <div class="profile-header__handle">@${escHtml(u.username)}</div>
+      ${u.bio ? `<div class="profile-header__bio">${escHtml(u.bio)}</div>` : isMe ? `<div class="profile-header__bio muted" style="font-style:italic">No bio yet — <a href="#" onclick="event.preventDefault();editBio()" style="color:var(--gold)">add one</a></div>` : ''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${isMe
+          ? `<button class="btn btn--ghost btn--sm" onclick="editBio()">Edit Bio</button>
+             <button class="btn btn--ghost btn--sm" onclick="logoutUser()">Sign Out</button>`
+          : `<button class="btn btn--ghost btn--sm">Follow</button>`
+        }
+      </div>
+    </div>
+    <div class="stats-row fade-up fade-up-2" style="margin-left:auto;flex-direction:column;align-items:flex-end;gap:12px">
+      <div style="display:flex;gap:28px">
+        <div class="stat"><div class="stat__value">${u.reviews || 0}</div><div class="stat__label">Reviews</div></div>
+        <div class="stat"><div class="stat__value">${u.avg_rating ? Number(u.avg_rating).toFixed(1) : '—'}</div><div class="stat__label">Avg Rating</div></div>
+      </div>
+      <div class="text-xs muted">Member since ${new Date(u.created_at).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+    </div>
+  `;
+}
+
+async function loadProfileReviews(username) {
+  try {
+    const reviews = await api.get(`/api/users/${encodeURIComponent(username)}/reviews`);
+
+    const title = document.getElementById('reviewsTabTitle');
+    title.textContent = `Reviews (${reviews.length})`;
+
+    // Recently reviewed grid
+    const grid = document.getElementById('recentlyReviewedGrid');
+    grid.innerHTML = reviews.slice(0,8).map(r => `
+      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="location.href='album.html?id=${encodeURIComponent(r.itunes_id)}'">
+        <img src="${escHtml(r.artwork_url)}" alt="${escHtml(r.title)}" loading="lazy" style="width:100%;height:100%;object-fit:cover">
+      </div>`).join('');
+
+    const feed = document.getElementById('profileReviewsFeed');
+    if (!reviews.length) {
+      feed.innerHTML = `<div style="padding:40px 20px;text-align:center;color:var(--text-muted);font-size:.9rem">No reviews yet.</div>`;
+
+      // Also populate diary
+      document.getElementById('diaryFeed').innerHTML = `<div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">No diary entries yet.</div>`;
+      return;
+    }
+
+    feed.innerHTML = reviews.map(r => `
+      <div class="review-card">
+        <div class="review-card__header">
+          <div class="review-card__album-art" style="cursor:pointer" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">
+            <img src="${escHtml(r.artwork_url)}" alt="${escHtml(r.title)}" loading="lazy">
+          </div>
+          <div class="review-card__info">
+            <div class="review-card__title" style="cursor:pointer" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">${escHtml(r.title)}</div>
+            <div class="review-card__artist">${escHtml(r.artist)} · ${escHtml(r.media_type || 'Album')}</div>
+            <div style="display:flex;align-items:center;gap:4px">${starsHtml(r.rating, 13)}<span style="font-size:.75rem;color:var(--gold);font-weight:600;margin-left:4px">${r.rating}</span></div>
+          </div>
+          <div class="text-xs muted" style="flex-shrink:0">${relativeTime(r.created_at)}</div>
+        </div>
+        ${r.review_text ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
+        ${_isOwnProfile ? `
+        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+          <button class="btn btn--ghost btn--sm" onclick="openEditReviewModal('${escHtml(r.itunes_id)}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn--ghost btn--sm" style="color:var(--coral)" onclick="deleteReview('${escHtml(r.itunes_id)}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            Delete
+          </button>
+        </div>` : ''}
+      </div>`).join('');
+
+    // Diary tab — same reviews in a different layout
+    document.getElementById('diaryFeed').innerHTML = reviews.map(r => `
+      <div style="display:grid;grid-template-columns:56px 1fr;gap:16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="text-align:center"><span class="text-xs muted">${new Date(r.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:6px;overflow:hidden;flex-shrink:0;cursor:pointer" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">
+            <img src="${escHtml(r.artwork_url)}" style="width:100%;height:100%;object-fit:cover" alt="">
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(r.title)}</div>
+            <div class="text-xs muted">${escHtml(r.artist)}</div>
+          </div>
+          <div class="rating-badge" style="font-size:.72rem;flex-shrink:0">${starsHtml(r.rating, 11)} ${r.rating}</div>
+        </div>
+      </div>`).join('');
+  } catch { /* server not running */ }
+}
+
+async function loadTop5(username) {
+  try {
+    const data = await api.get(`/api/users/${encodeURIComponent(username)}/top5`);
+
+    // Albums
+    const albumsList = document.getElementById('top5AlbumsList');
+    if (data.albums?.length) {
+      albumsList.innerHTML = data.albums.map((a, i) => `
+        <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunes_id)}'">
+          <div class="top5-item__num">${a.position}</div>
+          <div class="top5-item__art"><img src="${escHtml(a.artwork_url)}" alt="" loading="lazy"></div>
+          <div class="top5-item__info">
+            <div class="top5-item__title">${escHtml(a.title)}</div>
+            <div class="top5-item__sub">${escHtml(a.artist)}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Songs
+    const songsList = document.getElementById('top5SongsList');
+    if (data.songs?.length) {
+      songsList.innerHTML = data.songs.map(s => `
+        <div class="top5-item">
+          <div class="top5-item__num">${s.position}</div>
+          <div class="top5-item__art" style="${s.artwork_url ? '' : 'background:linear-gradient(135deg,#7c5cbf,#d4af37);display:flex;align-items:center;justify-content:center;font-size:1.1rem'}">
+            ${s.artwork_url ? `<img src="${escHtml(s.artwork_url)}" alt="" loading="lazy">` : '🎵'}
+          </div>
+          <div class="top5-item__info">
+            <div class="top5-item__title">${escHtml(s.song_title)}</div>
+            <div class="top5-item__sub">${escHtml(s.artist)}${s.album_title ? ' · ' + escHtml(s.album_title) : ''}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Artists
+    const artistsList = document.getElementById('top5ArtistsList');
+    if (data.artists?.length) {
+      artistsList.innerHTML = data.artists.map(a => `
+        <div class="top5-item">
+          <div class="top5-item__num">${a.position}</div>
+          <div class="top5-item__art" style="${a.artwork_url ? '' : 'background:linear-gradient(135deg,#d4af37,#7c5cbf);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff'}">
+            ${a.artwork_url ? `<img src="${escHtml(a.artwork_url)}" alt="" loading="lazy">` : escHtml(a.artist_name.slice(0,2).toUpperCase())}
+          </div>
+          <div class="top5-item__info">
+            <div class="top5-item__title">${escHtml(a.artist_name)}</div>
+            <div class="top5-item__sub">${escHtml(a.genre || '')}</div>
+          </div>
+        </div>`).join('');
+    }
+  } catch { /* server not running */ }
+}
+
+function editBio() {
+  const current = _profileUser?.bio || '';
+  const input   = prompt('Enter your bio (max 500 chars):', current);
+  if (input === null) return;
+  api.put('/api/users/me/profile', { bio: input })
+    .then(() => { showToast('Bio updated!'); initPage(); })
+    .catch(err => alert(err.message));
+}
+
+// ── Tab switching ───────────────────────────────────────────
+document.querySelectorAll('.profile-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.profile-tab').forEach(t => {
+      t.style.color = 'var(--text-muted)';
+      t.style.borderBottomColor = 'transparent';
+    });
+    btn.style.color = 'var(--gold)';
+    btn.style.borderBottomColor = 'var(--gold)';
+    ['tab-reviews','tab-top-lists','tab-diary','tab-lists'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const target = document.getElementById(btn.dataset.tab);
+    if (target) target.style.display = '';
+  });
+});
+
+// ── Edit Top 5 ──────────────────────────────────────────────
+function openEditTop5(type) {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  _editTop5Type = type;
+  _top5Entries  = [];
+
+  const titles  = { albums: 'Edit Top 5 Albums', songs: 'Edit Top 5 Songs', artists: 'Edit Top 5 Artists' };
+  const hints   = { albums: 'Search for albums to add.', songs: 'Search for songs to add.', artists: 'Search for artists to add.' };
+  document.getElementById('editTop5Title').textContent = titles[type];
+  document.getElementById('editTop5Hint').textContent  = hints[type];
+  document.getElementById('top5SearchInput').value     = '';
+  document.getElementById('top5SearchResults').style.display = 'none';
+  document.getElementById('top5Error').style.display   = 'none';
+  renderSelectedTop5();
+
+  // Load current top5 into _top5Entries
+  api.get(`/api/users/${encodeURIComponent(_profileUser?.username || '')}/top5`).then(data => {
+    const key = { albums: 'albums', songs: 'songs', artists: 'artists' }[type];
+    if (data[key]?.length) {
+      _top5Entries = data[key].map((item, i) => ({
+        position: item.position || i + 1,
+        label:    type === 'albums' ? item.title : (type === 'songs' ? item.song_title : item.artist_name),
+        sub:      type === 'albums' ? item.artist : (type === 'songs' ? item.artist : item.genre),
+        artwork:  item.artwork_url || '',
+        itunesId: item.itunes_id || item.itunes_track_id || '',
+        // raw data for saving
+        raw: item,
+      }));
+      renderSelectedTop5();
+    }
+  }).catch(() => {});
+
+  document.getElementById('editTop5Modal').classList.add('open');
+
+  // Setup search
+  const searchInput = document.getElementById('top5SearchInput');
+  searchInput.oninput = () => {
+    clearTimeout(_top5SearchTimeout);
+    const q = searchInput.value.trim();
+    if (!q) { document.getElementById('top5SearchResults').style.display = 'none'; return; }
+    _top5SearchTimeout = setTimeout(() => searchTop5(q), 350);
+  };
+}
+
+async function searchTop5(q) {
+  const resultsEl = document.getElementById('top5SearchResults');
+  resultsEl.style.display = '';
+  resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:.85rem">Searching…</div>';
+
+  try {
+    const typeMap = { albums: 'album', songs: 'track', artists: 'artist' };
+    const results = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=${typeMap[_editTop5Type]}&limit=6`);
+
+    if (!results.length) {
+      resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:.85rem">No results found.</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = results.map(item => {
+      const label   = _editTop5Type === 'albums' ? item.title : (_editTop5Type === 'songs' ? item.title : item.name);
+      const sub     = _editTop5Type === 'albums' ? item.artist : (_editTop5Type === 'songs' ? `${item.artist} · ${item.album || ''}` : item.genre || '');
+      const artwork = item.artwork || '';
+      return `
+        <div onclick='addToTop5(${JSON.stringify({ label, sub, artwork, itunesId: item.itunesId || '', raw: item })})'
+          style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .15s"
+          onmouseenter="this.style.background='var(--bg-card)'" onmouseleave="this.style.background=''">
+          ${artwork ? `<img src="${escHtml(artwork)}" style="width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0">` : '<div style="width:36px;height:36px;border-radius:4px;background:var(--bg-card);flex-shrink:0"></div>'}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(label)}</div>
+            <div style="font-size:.75rem;color:var(--text-muted)">${escHtml(sub)}</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </div>`;
+    }).join('');
+  } catch {
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--coral);font-size:.85rem">Search failed.</div>';
+  }
+}
+
+function addToTop5(item) {
+  if (_top5Entries.length >= 5) { document.getElementById('top5Error').textContent = 'Max 5 entries.'; document.getElementById('top5Error').style.display = ''; return; }
+  document.getElementById('top5Error').style.display = 'none';
+  _top5Entries.push({ ...item, position: _top5Entries.length + 1 });
+  document.getElementById('top5SearchInput').value = '';
+  document.getElementById('top5SearchResults').style.display = 'none';
+  renderSelectedTop5();
+}
+
+function removeFromTop5(idx) {
+  _top5Entries.splice(idx, 1);
+  _top5Entries.forEach((e, i) => e.position = i + 1);
+  renderSelectedTop5();
+}
+
+let _dragSrcIdx = null;
+
+function renderSelectedTop5() {
+  const el = document.getElementById('top5Selected');
+  if (!_top5Entries.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:.85rem;padding:8px 0">Nothing selected yet</div>';
+    return;
+  }
+  el.innerHTML = _top5Entries.map((e, i) => `
+    <div draggable="true" data-idx="${i}"
+      style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-raised);border-radius:var(--radius-sm);cursor:grab;transition:opacity .15s"
+      ondragstart="top5DragStart(event,${i})"
+      ondragover="top5DragOver(event)"
+      ondrop="top5Drop(event,${i})"
+      ondragend="top5DragEnd(event)">
+      <span style="color:var(--text-dim);font-size:1rem;line-height:1;flex-shrink:0;cursor:grab" title="Drag to reorder">⠿</span>
+      <span style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:${i===0?'var(--gold)':i===1?'#a0a0b8':i===2?'#cd7f32':'var(--text-dim)'};min-width:20px;text-align:center">${i+1}</span>
+      ${e.artwork ? `<img src="${escHtml(e.artwork)}" style="width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0">` : ''}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(e.label)}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">${escHtml(e.sub || '')}</div>
+      </div>
+      <button onclick="removeFromTop5(${i})" style="background:none;border:none;cursor:pointer;color:var(--text-dim);padding:4px" title="Remove">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+function top5DragStart(e, idx) {
+  _dragSrcIdx = idx;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function top5DragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function top5Drop(e, idx) {
+  e.preventDefault();
+  if (_dragSrcIdx === null || _dragSrcIdx === idx) return;
+  const moved = _top5Entries.splice(_dragSrcIdx, 1)[0];
+  _top5Entries.splice(idx, 0, moved);
+  _top5Entries.forEach((entry, i) => entry.position = i + 1);
+  renderSelectedTop5();
+  _dragSrcIdx = null;
+}
+function top5DragEnd(e) {
+  _dragSrcIdx = null;
+  e.currentTarget.style.opacity = '';
+}
+
+async function saveTop5() {
+  const btn = document.getElementById('saveTop5Btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  document.getElementById('top5Error').style.display = 'none';
+
+  try {
+    const entries = _top5Entries.map((e, i) => {
+      if (_editTop5Type === 'albums') return { position: i+1, itunesId: e.itunesId, title: e.label, artist: e.sub, artwork: e.artwork, year: e.raw?.year, genre: e.raw?.genre };
+      if (_editTop5Type === 'songs')  return { position: i+1, itunesId: e.itunesId, songTitle: e.label, artist: e.raw?.artist || e.sub, albumTitle: e.raw?.album || '', artwork: e.artwork };
+      if (_editTop5Type === 'artists')return { position: i+1, itunesId: e.itunesId, artistName: e.label, artwork: e.artwork, genre: e.sub };
+    });
+    await api.put(`/api/users/me/top5/${_editTop5Type}`, { entries });
+    document.getElementById('editTop5Modal').classList.remove('open');
+    showToast('Top 5 saved! 🎵');
+    loadTop5(_profileUser?.username || '');
+  } catch (err) {
+    document.getElementById('top5Error').textContent = err.message;
+    document.getElementById('top5Error').style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+document.getElementById('editTop5Modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('editTop5Modal')) document.getElementById('editTop5Modal').classList.remove('open');
+});
+
+// ── Custom Lists ────────────────────────────────────────────
+let _lists = [];
+let _activeListId = null;
+let _activeListItems = [];
+let _listSearchTimeout;
+
+async function loadLists(username) {
+  try {
+    _lists = await api.get(`/api/users/${encodeURIComponent(username)}/lists`);
+    const title = document.getElementById('listsTabTitle');
+    title.textContent = `Lists (${_lists.length})`;
+    renderLists();
+  } catch { /* server not running */ }
+}
+
+function renderLists() {
+  const el = document.getElementById('listsContainer');
+  if (!_lists.length) {
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">${_isOwnProfile ? 'No lists yet — create one with the button above.' : 'No lists yet.'}</div>`;
+    return;
+  }
+  el.innerHTML = _lists.map(l => `
+    <div class="review-card" style="cursor:pointer" onclick="openManageListModal(${l.id})">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.95rem;margin-bottom:2px">${escHtml(l.title)}</div>
+          ${l.description ? `<div class="text-sm muted">${escHtml(l.description)}</div>` : ''}
+          <div class="text-xs muted" style="margin-top:4px">${l.item_count} album${l.item_count !== 1 ? 's' : ''} · ${relativeTime(l.created_at)}</div>
+        </div>
+        ${_isOwnProfile ? `
+        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn btn--ghost btn--sm" onclick="openEditListModal(${l.id},'${escHtml(l.title).replace(/'/g,"\\'")}','${escHtml(l.description||'').replace(/'/g,"\\'")}')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn--ghost btn--sm" style="color:var(--coral)" onclick="deleteList(${l.id})">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+// Create / Edit list modal
+let _editingListId = null;
+
+function openCreateListModal() {
+  _editingListId = null;
+  document.getElementById('createListModalTitle').textContent = 'New List';
+  document.getElementById('saveListBtn').textContent = 'Create List';
+  document.getElementById('listTitleInput').value = '';
+  document.getElementById('listDescInput').value = '';
+  document.getElementById('createListError').style.display = 'none';
+  document.getElementById('createListModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('listTitleInput').focus(), 50);
+}
+
+function openEditListModal(id, title, desc) {
+  _editingListId = id;
+  document.getElementById('createListModalTitle').textContent = 'Edit List';
+  document.getElementById('saveListBtn').textContent = 'Save Changes';
+  document.getElementById('listTitleInput').value = title;
+  document.getElementById('listDescInput').value = desc;
+  document.getElementById('createListError').style.display = 'none';
+  document.getElementById('createListModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('listTitleInput').focus(), 50);
+}
+
+function closeCreateListModal() {
+  document.getElementById('createListModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function saveList() {
+  const title = document.getElementById('listTitleInput').value.trim();
+  const desc  = document.getElementById('listDescInput').value.trim();
+  const errEl = document.getElementById('createListError');
+  if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = ''; return; }
+
+  const btn = document.getElementById('saveListBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  errEl.style.display = 'none';
+
+  try {
+    if (_editingListId) {
+      await api.put(`/api/lists/${_editingListId}`, { title, description: desc });
+    } else {
+      await api.post('/api/lists', { title, description: desc });
+    }
+    closeCreateListModal();
+    showToast(_editingListId ? 'List updated!' : 'List created! 🎵');
+    loadLists(_profileUser.username);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = _editingListId ? 'Save Changes' : 'Create List';
+  }
+}
+
+async function deleteList(id) {
+  if (!confirm('Delete this list? This cannot be undone.')) return;
+  try {
+    await api.delete(`/api/lists/${id}`);
+    showToast('List deleted.');
+    loadLists(_profileUser.username);
+  } catch (err) {
+    showToast('Error: ' + err.message);
+  }
+}
+
+// Manage list modal (view + add/remove albums)
+async function openManageListModal(id) {
+  _activeListId = id;
+  const modal = document.getElementById('manageListModal');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('manageListItems').innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:16px 0;text-align:center">Loading…</div>';
+  document.getElementById('manageListAddSection').style.display = _isOwnProfile ? '' : 'none';
+  document.getElementById('listAddSearch').value = '';
+  document.getElementById('listAddResults').style.display = 'none';
+
+  try {
+    const data = await api.get(`/api/lists/${id}`);
+    _activeListItems = data.items || [];
+    document.getElementById('manageListTitle').textContent = data.title;
+    document.getElementById('manageListDesc').textContent = data.description || '';
+    renderManageListItems();
+  } catch (err) {
+    document.getElementById('manageListItems').innerHTML = `<div style="color:var(--coral);font-size:.875rem">${escHtml(err.message)}</div>`;
+  }
+
+  // Wire up search
+  const searchInput = document.getElementById('listAddSearch');
+  searchInput.oninput = () => {
+    clearTimeout(_listSearchTimeout);
+    const q = searchInput.value.trim();
+    if (!q) { document.getElementById('listAddResults').style.display = 'none'; return; }
+    _listSearchTimeout = setTimeout(() => runListSearch(q), 300);
+  };
+}
+
+function renderManageListItems() {
+  const el = document.getElementById('manageListItems');
+  if (!_activeListItems.length) {
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:16px 0;text-align:center">${_isOwnProfile ? 'No albums yet — search above to add some.' : 'No albums in this list yet.'}</div>`;
+    return;
+  }
+  el.innerHTML = _activeListItems.map(a => `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:44px;height:44px;border-radius:6px;overflow:hidden;flex-shrink:0;cursor:pointer;background:var(--bg-raised)"
+        onclick="location.href='album.html?id=${encodeURIComponent(a.itunes_id)}'">
+        <img src="${escHtml(a.artwork_url)}" style="width:100%;height:100%;object-fit:cover" alt="">
+      </div>
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="location.href='album.html?id=${encodeURIComponent(a.itunes_id)}'">
+        <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.title)}</div>
+        <div class="text-xs muted">${escHtml(a.artist)}${a.year ? ' · ' + a.year : ''}</div>
+      </div>
+      ${_isOwnProfile ? `
+      <button class="btn btn--ghost btn--sm" style="color:var(--coral);flex-shrink:0" onclick="removeFromList('${escHtml(a.itunes_id)}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        Remove
+      </button>` : ''}
+    </div>`).join('');
+}
+
+async function runListSearch(q) {
+  const resultsEl = document.getElementById('listAddResults');
+  resultsEl.style.display = '';
+  resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:.85rem">Searching…</div>';
+  try {
+    const results = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=album&limit=6`);
+    if (!results.length) { resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:.85rem">No results.</div>'; return; }
+    resultsEl.innerHTML = results.map(a => `
+      <div onclick='addToList(${JSON.stringify(a)})'
+        style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .15s"
+        onmouseenter="this.style.background='var(--bg-card)'" onmouseleave="this.style.background=''">
+        <img src="${escHtml(a.artwork)}" style="width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)" alt="">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.title)}</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">${escHtml(a.artist)}${a.year ? ' · ' + a.year : ''}</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      </div>`).join('');
+  } catch {
+    resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--coral);font-size:.85rem">Search failed.</div>';
+  }
+}
+
+async function addToList(album) {
+  try {
+    await api.post(`/api/lists/${_activeListId}/items`, {
+      itunesId: album.itunesId, title: album.title, artist: album.artist,
+      artwork: album.artwork, year: album.year, genre: album.genre, mediaType: album.mediaType,
+    });
+    document.getElementById('listAddSearch').value = '';
+    document.getElementById('listAddResults').style.display = 'none';
+    showToast(`"${album.title}" added to list!`);
+    // Refresh items
+    const data = await api.get(`/api/lists/${_activeListId}`);
+    _activeListItems = data.items || [];
+    renderManageListItems();
+    loadLists(_profileUser.username);
+  } catch (err) {
+    showToast('Error: ' + err.message);
+  }
+}
+
+async function removeFromList(itunesId) {
+  try {
+    await api.delete(`/api/lists/${_activeListId}/items/${encodeURIComponent(itunesId)}`);
+    _activeListItems = _activeListItems.filter(a => a.itunes_id !== itunesId);
+    renderManageListItems();
+    loadLists(_profileUser.username);
+    showToast('Album removed from list.');
+  } catch (err) {
+    showToast('Error: ' + err.message);
+  }
+}
+
+document.getElementById('createListModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('createListModal')) closeCreateListModal();
+});
+document.getElementById('manageListModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('manageListModal')) {
+    document.getElementById('manageListModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
+</script>
+</body>
+</html>

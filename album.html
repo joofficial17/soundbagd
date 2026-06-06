@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Album · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"><!-- injected by app.js --></div>
+  </div>
+</nav>
+
+<!-- ── Album Header ─────────────────────────────────────────── -->
+<div class="album-header" id="albumHeader">
+  <!-- Loading state -->
+  <div class="container">
+    <div class="album-header__content" id="albumHeaderContent">
+      <div style="width:200px;height:200px;border-radius:var(--radius-lg);background:var(--bg-raised);flex-shrink:0;animation:pulse 1.5s ease infinite"></div>
+      <div style="flex:1">
+        <div style="height:14px;width:80px;background:var(--bg-raised);border-radius:4px;margin-bottom:16px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:40px;width:60%;background:var(--bg-raised);border-radius:4px;margin-bottom:12px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:20px;width:40%;background:var(--bg-raised);border-radius:4px;animation:pulse 1.5s ease infinite"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main Content ─────────────────────────────────────────── -->
+<div class="container" style="padding-top:40px;padding-bottom:60px">
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:40px" class="album-main-grid">
+
+    <!-- Left -->
+    <div>
+
+      <!-- About -->
+      <section style="margin-bottom:40px" id="aboutSection" style="display:none">
+        <h2 class="h4" style="margin-bottom:12px">About</h2>
+        <p id="aboutText" style="color:rgba(240,237,232,.8);line-height:1.75;font-size:.95rem"></p>
+      </section>
+
+      <!-- Tracklist -->
+      <section style="margin-bottom:40px" id="tracklistSection">
+        <h2 class="h4" style="margin-bottom:16px">Tracklist</h2>
+        <div class="tracklist" id="tracklistEl">
+          <div style="padding:20px;color:var(--text-muted);text-align:center;font-size:.875rem;animation:pulse 1.5s ease infinite">Loading tracks…</div>
+        </div>
+      </section>
+
+      <!-- Reviews -->
+      <section id="reviewsSection">
+        <div class="section__header" style="margin-bottom:20px">
+          <h2 class="h2" id="reviewsTitle">Reviews</h2>
+          <select id="reviewSort" style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);padding:6px 12px;font-size:.8rem;outline:none;cursor:pointer">
+            <option>Most Recent</option>
+            <option>Highest Rated</option>
+          </select>
+        </div>
+
+        <!-- Write a review prompt -->
+        <div id="writeReviewPrompt" style="background:var(--bg-raised);border:1px dashed var(--border-md);border-radius:var(--radius-lg);padding:20px;margin-bottom:24px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:var(--transition)"
+          onclick="triggerReview()"
+          onmouseover="this.style.borderColor='var(--gold)'"
+          onmouseout="this.style.borderColor='var(--border-md)'">
+          <div id="writeReviewAvatar" class="avatar" style="background:var(--bg-hover)">?</div>
+          <div style="flex:1">
+            <div style="font-size:.875rem;color:var(--text-muted)" id="writeReviewHint">Sign in to rate this album</div>
+          </div>
+          <button class="btn btn--gold btn--sm" onclick="event.stopPropagation();triggerReview()">Rate / Review</button>
+        </div>
+
+        <!-- Reviews feed -->
+        <div class="feed" id="albumReviewsFeed">
+          <div style="padding:30px 20px;text-align:center;color:var(--text-muted)">
+            <div style="font-size:.9rem">No reviews yet.<br>Be the first to review this album!</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Sidebar -->
+    <aside>
+
+      <!-- Rating Stats -->
+      <div class="card" style="padding:24px;margin-bottom:24px" id="ratingCard">
+        <h2 class="h4" style="margin-bottom:18px">Community Rating</h2>
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-family:'Playfair Display',serif;font-size:3.5rem;font-weight:700;color:var(--gold);line-height:1" id="avgRatingNum">—</div>
+          <div id="avgRatingStars" style="display:flex;justify-content:center;gap:4px;margin:6px 0"></div>
+          <div class="text-xs muted" id="totalRatings">0 ratings</div>
+        </div>
+        <div id="ratingBars">
+          <div style="color:var(--text-dim);font-size:.8rem;text-align:center;padding:8px 0">No ratings yet</div>
+        </div>
+      </div>
+
+      <!-- Artist Info -->
+      <div class="card" style="padding:20px;margin-bottom:24px" id="artistCard">
+        <h2 class="h4" style="margin-bottom:14px">Artist</h2>
+        <div style="height:60px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div>
+      </div>
+
+      <!-- Apple Music link -->
+      <div id="listenOnCard" style="display:none;margin-bottom:24px">
+        <a id="listenOnLink" href="#" target="_blank" rel="noopener"
+          class="btn btn--ghost" style="width:100%;justify-content:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          Listen on Apple Music
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+
+      <!-- More like this -->
+      <div id="moreLikeSection">
+        <h2 class="h4" style="margin-bottom:14px">More from This Artist</h2>
+        <div id="moreLikeList" style="display:flex;flex-direction:column;gap:10px">
+          <div style="color:var(--text-muted);font-size:.85rem">Loading…</div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__logo">Soundbagd</div>
+    <div class="footer__links"><a href="index.html">← Back to Explore</a></div>
+    <div class="footer__copy">Music data from Apple iTunes · © 2025 Soundbagd</div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+let _album = null;
+let _albumReviews = [];
+
+document.getElementById('reviewSort').addEventListener('change', function() {
+  renderAlbumReviewList(_albumReviews, this.value);
+});
+
+function renderAlbumReviewList(reviews, sort) {
+  const feed = document.getElementById('albumReviewsFeed');
+  const sorted = [...reviews];
+  if (sort === 'Highest Rated') sorted.sort((a, b) => b.rating - a.rating || new Date(b.created_at) - new Date(a.created_at));
+  else sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const me = auth.getUser();
+  feed.innerHTML = sorted.map(r => {
+    const isOwn = me && me.username.toLowerCase() === r.username.toLowerCase();
+    return `
+      <div class="review-card">
+        <div class="review-card__user" style="margin-bottom:8px">
+          <div class="avatar" style="width:36px;height:36px;font-size:.8rem;background:${escHtml(r.avatar_gradient)}">${escHtml(r.initials)}</div>
+          <div>
+            <a href="profile.html?u=${encodeURIComponent(r.username)}" class="review-card__username" style="color:inherit">${escHtml(r.username)}</a>
+            <div class="review-card__date">${relativeTime(r.created_at)}</div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+            ${starsHtml(r.rating, 14)}
+            <span style="font-size:.78rem;color:var(--gold);font-weight:600">${r.rating}</span>
+          </div>
+        </div>
+        ${r.review_text
+          ? `<p class="review-card__text" style="-webkit-line-clamp:unset;display:block">${escHtml(r.review_text)}</p>`
+          : `<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>`
+        }
+        ${r.dsp_url ? `<div style="margin-top:10px"><a href="${escHtml(r.dsp_url)}" target="_blank" rel="noopener" class="text-xs" style="color:var(--gold);display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Reference Link</a></div>` : ''}
+        ${isOwn ? `
+        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+          <button class="btn btn--ghost btn--sm" onclick="openEditReviewModal('${escHtml(_album?.itunesId)}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn--ghost btn--sm" style="color:var(--coral)" onclick="deleteReview('${escHtml(_album?.itunesId)}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            Delete
+          </button>
+        </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function initPage() {
+  const params  = new URLSearchParams(location.search);
+  const id      = params.get('id');
+  if (!id) { document.getElementById('albumHeaderContent').innerHTML = '<div style="color:var(--coral)">No album ID provided.</div>'; return; }
+
+  try {
+    _album = await api.get(`/api/music/album/${encodeURIComponent(id)}`);
+    renderAlbumHeader(_album);
+    renderTracklist(_album);
+    renderRatingCard(_album);
+    renderArtistCard(_album);
+    updateWritePrompt();
+    loadAlbumReviews();
+    loadMoreFromArtist(_album.artist);
+    document.title = `${_album.title} — ${_album.artist} · Soundbagd`;
+  } catch (err) {
+    document.getElementById('albumHeaderContent').innerHTML = `<div style="color:var(--coral);padding:20px">${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderAlbumHeader(a) {
+  // Background blur
+  const hdr = document.getElementById('albumHeader');
+  hdr.style.position = 'relative';
+  if (a.artwork) {
+    const bg = document.createElement('div');
+    bg.className = 'album-header__bg';
+    bg.style.backgroundImage = `url('${escHtml(a.artwork)}')`;
+    hdr.insertBefore(bg, hdr.firstChild);
+  }
+
+  document.getElementById('albumHeaderContent').innerHTML = `
+    <div class="album-header__art fade-up">
+      <img src="${escHtml(a.artwork)}" alt="${escHtml(a.title)}" onerror="this.parentElement.style.background='var(--bg-raised)'">
+    </div>
+    <div class="album-header__info fade-up fade-up-1">
+      <div class="album-header__type">
+        <span class="tag tag--gold">${escHtml(a.mediaType || 'Album')}</span>
+        ${a.genre ? `<span class="tag">${escHtml(a.genre)}</span>` : ''}
+      </div>
+      <h1 class="album-header__title">${escHtml(a.title)}</h1>
+      <div class="album-header__artist">${escHtml(a.artist)}</div>
+      <div class="album-header__meta">
+        ${a.year ? `<span class="muted text-sm">${a.year}</span><span style="color:var(--border-md)">·</span>` : ''}
+        ${a.trackCount ? `<span class="muted text-sm">${a.trackCount} tracks</span><span style="color:var(--border-md)">·</span>` : ''}
+        ${a.stats?.total > 0
+          ? `<div class="rating-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>${a.stats.avg} · ${a.stats.total} ratings</div>`
+          : `<span class="text-xs muted">No ratings yet</span>`
+        }
+      </div>
+      <div class="album-header__actions">
+        <button class="btn btn--gold" onclick="triggerReview()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Rate / Review
+        </button>
+        ${a.itunesUrl ? `
+          <a href="${escHtml(a.itunesUrl)}" target="_blank" rel="noopener" class="btn btn--ghost">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Apple Music
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>` : ''}
+        <button class="btn btn--ghost" onclick="openDspModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Add from DSP
+        </button>
+      </div>
+    </div>`;
+
+  // Update Apple Music listen card
+  if (a.itunesUrl) {
+    document.getElementById('listenOnCard').style.display = '';
+    document.getElementById('listenOnLink').href = a.itunesUrl;
+  }
+}
+
+function renderTracklist(a) {
+  if (!a.tracks?.length) {
+    document.getElementById('tracklistSection').style.display = 'none';
+    return;
+  }
+  document.getElementById('tracklistEl').innerHTML = a.tracks.map(t => `
+    <div class="track-item">
+      <span class="track-item__num">${t.number || ''}</span>
+      <span class="track-item__title">${escHtml(t.title)}</span>
+      ${t.itunesUrl ? `<a href="${escHtml(t.itunesUrl)}" target="_blank" rel="noopener" class="text-xs muted" style="margin-left:auto;padding-right:12px;transition:var(--transition)" title="Open in Apple Music" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color=''">♫</a>` : '<span style="margin-left:auto"></span>'}
+      <span class="track-item__duration">${ms(t.duration)}</span>
+    </div>`).join('');
+}
+
+function renderRatingCard(a) {
+  const stats = a.stats || {};
+  const total = stats.total || 0;
+  const avg   = stats.avg;
+
+  document.getElementById('avgRatingNum').textContent = avg ? avg.toFixed(1) : '—';
+  document.getElementById('totalRatings').textContent = `${total} ${total === 1 ? 'rating' : 'ratings'}`;
+
+  if (avg) {
+    const starsEl = document.getElementById('avgRatingStars');
+    starsEl.innerHTML = starsHtml(avg, 18);
+  }
+
+  if (!total) return;
+  const bars = [
+    { label: '5', count: stats.r5 || 0 },
+    { label: '4.5', count: stats.r4h || 0 },
+    { label: '4', count: stats.r4 || 0 },
+    { label: '3.5', count: stats.r3h || 0 },
+    { label: '3', count: stats.r3 || 0 },
+    { label: '≤2.5', count: stats.rLow || 0 },
+  ];
+  const maxCount = Math.max(...bars.map(b => b.count), 1);
+  document.getElementById('ratingBars').innerHTML = bars.map(b => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <span class="text-xs" style="min-width:28px;text-align:right;color:var(--gold)">${b.label}</span>
+      <div style="flex:1;height:5px;background:var(--bg-raised);border-radius:3px;overflow:hidden">
+        <div style="height:100%;background:var(--gold);border-radius:3px;width:${Math.round(b.count / maxCount * 100)}%"></div>
+      </div>
+      <span class="text-xs muted" style="min-width:24px">${b.count}</span>
+    </div>`).join('');
+}
+
+function renderArtistCard(a) {
+  document.getElementById('artistCard').innerHTML = `
+    <h2 class="h4" style="margin-bottom:14px">Artist</h2>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="avatar avatar--lg" style="background:linear-gradient(135deg,#7c5cbf,#d4af37);border-radius:var(--radius-sm);flex-shrink:0">
+        ${escHtml((a.artist || '?').slice(0, 2).toUpperCase())}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:1rem">${escHtml(a.artist)}</div>
+        ${a.genre ? `<div class="text-xs muted">${escHtml(a.genre)}</div>` : ''}
+      </div>
+    </div>
+    <button class="btn btn--ghost btn--sm" style="width:100%;justify-content:center"
+      onclick="location.href='index.html?q=${encodeURIComponent(a.artist)}'">
+      View Discography
+    </button>`;
+}
+
+function updateWritePrompt() {
+  const user = auth.getUser();
+  const hint = document.getElementById('writeReviewHint');
+  const av   = document.getElementById('writeReviewAvatar');
+  if (user) {
+    if (hint) hint.textContent = `What did you think of ${_album?.title || 'this album'}?`;
+    if (av)   { av.textContent = user.initials; av.style.background = user.gradient; }
+  }
+}
+
+async function triggerReview() {
+  if (!_album) return;
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  openReviewModal(_album);
+}
+
+async function loadAlbumReviews() {
+  if (!_album?.itunesId) return;
+  try {
+    _albumReviews = await api.get(`/api/reviews/album/${encodeURIComponent(_album.itunesId)}`);
+    const title = document.getElementById('reviewsTitle');
+    title.innerHTML = `Reviews <span class="muted text-sm" style="font-family:'Inter',sans-serif;font-weight:400">(${_albumReviews.length})</span>`;
+
+    if (!_albumReviews.length) {
+      document.getElementById('albumReviewsFeed').innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--text-muted)"><div style="font-size:.9rem">No reviews yet.<br>Be the first to review this album!</div></div>`;
+      return;
+    }
+
+    renderAlbumReviewList(_albumReviews, document.getElementById('reviewSort').value);
+
+    // Update rating card with fresh stats
+    const statsRes = await api.get(`/api/music/album/${encodeURIComponent(_album.itunesId)}`).catch(() => null);
+    if (statsRes?.stats) { _album.stats = statsRes.stats; renderRatingCard(_album); }
+  } catch { /* server not running */ }
+}
+
+async function loadMoreFromArtist(artist) {
+  if (!artist) return;
+  try {
+    const albums = await api.get(`/api/music/search?q=${encodeURIComponent(artist)}&type=album&limit=6`);
+    const others = albums.filter(a => a.itunesId !== _album?.itunesId).slice(0, 4);
+    const list = document.getElementById('moreLikeList');
+    if (!others.length) { document.getElementById('moreLikeSection').style.display = 'none'; return; }
+    list.innerHTML = others.map(a => `
+      <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'" style="padding:10px 12px">
+        <div class="top5-item__art"><img src="${escHtml(a.artwork)}" alt="" loading="lazy"></div>
+        <div class="top5-item__info">
+          <div class="top5-item__title">${escHtml(a.title)}</div>
+          <div class="top5-item__sub">${a.year || ''} · ${escHtml(a.mediaType || 'Album')}</div>
+        </div>
+      </div>`).join('');
+  } catch { document.getElementById('moreLikeSection').style.display = 'none'; }
+}
+</script>
+</body>
+</html>
