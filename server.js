@@ -161,12 +161,50 @@ const cache    = new Map();
 const CACHE_1H = 60 * 60 * 1000;
 const CACHE_5M = 5  * 60 * 1000;
 
+// ── Spotify Credentials ────────────────────────────────────
+const SPOTIFY_CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID     || '671ec2ef78314d90bf3a765a8cc53aa5';
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '2317e36fc8b742eba75c71b747b7bf1b';
+
+let spotifyToken    = null;
+let spotifyTokenExp = 0;
+
+async function getSpotifyToken() {
+  if (spotifyToken && Date.now() < spotifyTokenExp - 30000) return spotifyToken;
+  const resp = await fetch('https://accounts.spotify.com/api/token', {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
+    },
+    body: 'grant_type=client_credentials',
+  });
+  if (!resp.ok) throw new Error(`Spotify auth failed: ${resp.status}`);
+  const data = await resp.json();
+  spotifyToken    = data.access_token;
+  spotifyTokenExp = Date.now() + data.expires_in * 1000;
+  return spotifyToken;
+}
+
+async function spotifyFetch(path, ttl = CACHE_1H) {
+  const url = path.startsWith('http') ? path : `https://api.spotify.com/v1${path}`;
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.ts < ttl) return hit.data;
+  const token = await getSpotifyToken();
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Spotify ${res.status} for ${url}`);
+  const data = await res.json();
+  cache.set(url, { data, ts: Date.now() });
+  return data;
+}
+
+// Generic cached fetch (kept for DSP oEmbed, YouTube, etc.)
 async function cachedFetch(url, ttl = CACHE_1H) {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.ts < ttl) return hit.data;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Soundbagd/1.0 (music review app)' },
-    timeout: 12000,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
   const data = await res.json();
@@ -174,25 +212,27 @@ async function cachedFetch(url, ttl = CACHE_1H) {
   return data;
 }
 
-// ── iTunes Helpers ─────────────────────────────────────────
-function artworkHQ(url, size = 600) {
-  if (!url) return '';
-  return url
-    .replace(/\d+x\d+bb/, `${size}x${size}bb`)
-    .replace(/\d+x\d+/, `${size}x${size}`);
-}
-
+// ── Spotify Helpers ────────────────────────────────────────
 function formatAlbum(item) {
+  // Handles both full album objects and simplified album objects from Spotify
+  const images  = item.images || [];
+  const artwork = images[0]?.url || '';           // largest image first
+  const artists = (item.artists || []).map(a => a.name).join(', ');
+  const releaseDate = item.release_date || '';
+  const year = releaseDate ? parseInt(releaseDate.slice(0, 4), 10) : null;
+  const genres = item.genres || [];
+
   return {
-    itunesId:  String(item.collectionId || ''),
-    title:     item.collectionName   || '',
-    artist:    item.artistName        || '',
-    artwork:   artworkHQ(item.artworkUrl100),
-    year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
-    genre:     item.primaryGenreName || '',
-    mediaType: item.collectionType   || 'Album',
-    trackCount:item.trackCount       || null,
-    itunesUrl: item.collectionViewUrl|| '',
+    itunesId:   item.id || '',                    // Spotify ID stored in itunesId field
+    title:      item.name || '',
+    artist:     artists,
+    artwork,
+    year,
+    genre:      genres[0] || item.label || '',
+    mediaType:  item.album_type === 'single' ? 'Single' : 'Album',
+    trackCount: item.total_tracks || null,
+    itunesUrl:  item.external_urls?.spotify || '', // Spotify URL stored in itunesUrl field
+    popularity: item.popularity || null,
   };
 }
 
@@ -284,70 +324,68 @@ app.get('/api/auth/me', auth, (req, res) => {
   res.json(u);
 });
 
-// ── MUSIC ROUTES (iTunes Search API — no key needed) ───────
+// ── MUSIC ROUTES (Spotify Web API) ─────────────────────────
 
-// GET /api/music/trending
+// Spotify Global Top 50 playlist ID (official, updated daily)
+const SPOTIFY_GLOBAL_TOP50 = '37i9dQZEVXbMDoHDwVN2tF';
+
+// GET /api/music/trending — Spotify Global Top 50
 app.get('/api/music/trending', async (req, res) => {
   try {
-    // Apple's official charts RSS (completely free, no key)
-    const data = await cachedFetch(
-      'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
+    // Pull tracks from Global Top 50, deduplicate by album, return top 50 unique albums
+    const data = await spotifyFetch(
+      `/playlists/${SPOTIFY_GLOBAL_TOP50}/tracks?limit=50&fields=items(track(album(id,name,artists,images,release_date,external_urls,total_tracks,album_type),popularity))`,
       CACHE_1H
     );
-    const albums = (data.feed?.results || []).map(item => ({
-      itunesId:  String(item.id),
-      title:     item.name,
-      artist:    item.artistName,
-      artwork:   artworkHQ(item.artworkUrl100),
-      year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
-      genre:     item.genres?.[0]?.name || '',
-      mediaType: 'Album',
-      itunesUrl: item.url || '',
-    }));
+
+    const seen   = new Set();
+    const albums = [];
+    for (const { track } of (data.items || [])) {
+      if (!track?.album?.id || seen.has(track.album.id)) continue;
+      seen.add(track.album.id);
+      const a = formatAlbum(track.album);
+      a.popularity = track.popularity;
+      albums.push(a);
+    }
+
     res.json(albums);
   } catch (err) {
     console.error('Trending error:', err.message);
-    // Fallback: recent popular albums via search
-    try {
-      const data = await cachedFetch(
-        'https://itunes.apple.com/search?term=album+2024+2025&entity=album&limit=20&sort=recent',
-        CACHE_1H
-      );
-      res.json((data.results || []).filter(r => r.collectionType).map(formatAlbum));
-    } catch { res.json([]); }
+    res.status(500).json({ error: 'Could not load trending' });
   }
 });
 
 // GET /api/music/genre-chart?genre=Hip-Hop&limit=25
-// Returns top albums in a specific genre using iTunes genreTerm attribute search
 app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
 
-  // Map display genre names → iTunes attribute search terms
-  const itunesToGenreTerm = {
-    'Country':    'Country',
-    'Hip-Hop':    'Hip-Hop/Rap',
-    'Pop':        'Pop',
-    'R&B':        'R&B/Soul',
-    'Rock':       'Rock',
-    'Jazz':       'Jazz',
-    'Electronic': 'Electronic',
-    'Indie':      'Alternative',
-    'Folk':       'Folk',
-    'Latin':      'Latino',
-    'Classical':  'Classical',
-    'Metal':      'Metal',
-    'K-Pop':      'K-Pop',
+  // Map display names → Spotify genre seed / search terms
+  const genreMap = {
+    'Country':    'country',
+    'Hip-Hop':    'hip-hop',
+    'Pop':        'pop',
+    'R&B':        'r-n-b',
+    'Rock':       'rock',
+    'Jazz':       'jazz',
+    'Electronic': 'electronic',
+    'Indie':      'indie',
+    'Folk':       'folk',
+    'Latin':      'latin',
+    'Classical':  'classical',
+    'Metal':      'metal',
+    'K-Pop':      'k-pop',
   };
-  const term = itunesToGenreTerm[genre] || genre;
+  const term = genreMap[genre] || genre.toLowerCase();
 
   try {
-    // attribute=genreTerm makes iTunes match the search term against genre field
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${Math.min(Number(limit), 50)}&country=us`;
-    const data = await cachedFetch(url, CACHE_1H);
-    const albums = (data.results || [])
-      .filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection')
+    const lim  = Math.min(Number(limit), 50);
+    const data = await spotifyFetch(
+      `/search?q=genre%3A${encodeURIComponent(term)}&type=album&limit=${lim}&market=US`,
+      CACHE_1H
+    );
+    const albums = (data.albums?.items || [])
+      .filter(a => a && a.id)
       .map(formatAlbum);
     res.json(albums);
   } catch (err) {
@@ -357,19 +395,15 @@ app.get('/api/music/genre-chart', async (req, res) => {
 });
 
 // GET /api/music/new-releases?limit=50
-// Returns recently released albums, distinct from "most-played" trending
 app.get('/api/music/new-releases', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 50);
-  const year  = new Date().getFullYear();
-  const prevYear = year - 1;
-
   try {
-    // Search iTunes for albums from the current and previous year, sorted by recency
-    const url = `https://itunes.apple.com/search?term=${year}+${prevYear}+new+music&entity=album&limit=${limit}&country=us`;
-    const data = await cachedFetch(url, CACHE_1H);
-    const albums = (data.results || [])
-      .filter(r => r.collectionType === 'Album' && r.releaseDate)
-      .sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
+    const data = await spotifyFetch(
+      `/browse/new-releases?limit=${limit}&country=US`,
+      CACHE_1H
+    );
+    const albums = (data.albums?.items || [])
+      .filter(a => a && a.id)
       .map(formatAlbum);
     res.json(albums);
   } catch (err) {
@@ -378,104 +412,115 @@ app.get('/api/music/new-releases', async (req, res) => {
   }
 });
 
-// GET /api/music/search?q=…&type=album|track|artist&limit=20&genreId=12
+// GET /api/music/search?q=…&type=album|track|artist&limit=20
 app.get('/api/music/search', async (req, res) => {
-  const { q, type = 'album', limit = 20, genreId } = req.query;
+  const { q, type = 'album', limit = 20 } = req.query;
   if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
 
-  const entityMap = { album: 'album', track: 'song', artist: 'musicArtist' };
-  const entity = entityMap[type] || 'album';
+  const typeMap = { album: 'album', track: 'track', artist: 'artist' };
+  const spType  = typeMap[type] || 'album';
 
   try {
-    let url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=${entity}&limit=${Math.min(Number(limit), 50)}`;
-    if (genreId) url += `&genreId=${encodeURIComponent(genreId)}`;
-    const data = await cachedFetch(url, CACHE_5M);
+    const data = await spotifyFetch(
+      `/search?q=${encodeURIComponent(q)}&type=${spType}&limit=${Math.min(Number(limit), 50)}&market=US`,
+      CACHE_5M
+    );
 
-    const results = (data.results || []).map(item => {
-      if (type === 'artist') return {
-        itunesId: String(item.artistId || ''),
-        name:     item.artistName || '',
-        genre:    item.primaryGenreName || '',
-        artwork:  artworkHQ(item.artworkUrl100 || ''),
-        url:      item.artistLinkUrl || '',
-      };
-      if (type === 'track') return {
-        itunesId:  String(item.trackId || ''),
-        title:     item.trackName    || '',
-        artist:    item.artistName   || '',
-        album:     item.collectionName || '',
-        albumId:   String(item.collectionId || ''),
-        artwork:   artworkHQ(item.artworkUrl100),
-        year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
-        duration:  item.trackTimeMillis || 0,
-        itunesUrl: item.trackViewUrl || '',
-      };
-      return formatAlbum(item);
-    });
+    if (type === 'artist') {
+      const results = (data.artists?.items || []).map(a => ({
+        itunesId: a.id,
+        name:     a.name,
+        genre:    a.genres?.[0] || '',
+        artwork:  a.images?.[0]?.url || '',
+        url:      a.external_urls?.spotify || '',
+        popularity: a.popularity,
+      }));
+      return res.json(results);
+    }
 
-    res.json(results);
+    if (type === 'track') {
+      const results = (data.tracks?.items || []).map(t => ({
+        itunesId:  t.id,
+        title:     t.name,
+        artist:    t.artists?.map(a => a.name).join(', ') || '',
+        album:     t.album?.name || '',
+        albumId:   t.album?.id  || '',
+        artwork:   t.album?.images?.[0]?.url || '',
+        year:      t.album?.release_date ? parseInt(t.album.release_date.slice(0, 4), 10) : null,
+        duration:  t.duration_ms || 0,
+        itunesUrl: t.external_urls?.spotify || '',
+      }));
+      return res.json(results);
+    }
+
+    res.json((data.albums?.items || []).filter(a => a?.id).map(formatAlbum));
   } catch (err) {
     console.error('Search error:', err.message);
     res.status(500).json({ error: 'Search failed — please try again' });
   }
 });
 
-// GET /api/music/album/:id  — full album with tracks + our review stats
+// GET /api/music/album/:id  — full Spotify album with tracks + our review stats
 app.get('/api/music/album/:id', async (req, res) => {
   const id = req.params.id;
 
-  // For DSP/custom albums not in iTunes, return data from our own DB
-  if (!id.match(/^\d+$/)) {
-    const dbAlbum = db.prepare('SELECT * FROM albums WHERE itunes_id=?').get(id);
-    if (dbAlbum) {
-      const stats = db.prepare(`
-        SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg
-        FROM reviews WHERE album_id=?
-      `).get(dbAlbum.id);
-      return res.json({
-        itunesId: dbAlbum.itunes_id, title: dbAlbum.title, artist: dbAlbum.artist,
-        artwork: dbAlbum.artwork_url, year: dbAlbum.year, genre: dbAlbum.genre,
-        mediaType: dbAlbum.media_type, trackCount: dbAlbum.track_count,
-        itunesUrl: dbAlbum.itunes_url, tracks: [], stats,
-      });
+  // Custom/DSP albums stored in our DB (non-Spotify IDs)
+  const dbAlbum = db.prepare('SELECT * FROM albums WHERE itunes_id=?').get(id);
+  if (dbAlbum) {
+    // Check if it's also in Spotify (might have been saved before migration)
+    const stats = db.prepare(`
+      SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg
+      FROM reviews WHERE album_id=?
+    `).get(dbAlbum.id);
+    // Try to enrich from Spotify if ID looks like a Spotify ID
+    if (/^[A-Za-z0-9]{22}$/.test(id)) {
+      try {
+        const sp = await spotifyFetch(`/albums/${id}`, CACHE_1H);
+        const album = formatAlbum(sp);
+        album.tracks = (sp.tracks?.items || []).map((t, i) => ({
+          number:   t.track_number || i + 1,
+          title:    t.name,
+          duration: t.duration_ms,
+          itunesUrl: t.external_urls?.spotify || '',
+        }));
+        album.stats = stats;
+        return res.json(album);
+      } catch { /* fall through to DB data */ }
     }
-    return res.status(404).json({ error: 'Album not found' });
+    return res.json({
+      itunesId: dbAlbum.itunes_id, title: dbAlbum.title, artist: dbAlbum.artist,
+      artwork: dbAlbum.artwork_url, year: dbAlbum.year, genre: dbAlbum.genre,
+      mediaType: dbAlbum.media_type, trackCount: dbAlbum.track_count,
+      itunesUrl: dbAlbum.itunes_url, tracks: [], stats,
+    });
   }
 
+  // Fetch directly from Spotify
   try {
-    const data = await cachedFetch(
-      `https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&entity=song`,
-      CACHE_1H
-    );
-    const results = data.results || [];
-    const collection = results.find(r => r.wrapperType === 'collection' || r.kind === 'album');
-    if (!collection) return res.status(404).json({ error: 'Album not found' });
+    const sp = await spotifyFetch(`/albums/${encodeURIComponent(id)}`, CACHE_1H);
+    if (!sp?.id) return res.status(404).json({ error: 'Album not found' });
 
-    const tracks = results
-      .filter(r => r.wrapperType === 'track' && r.kind === 'song')
-      .map(t => ({
-        number:    t.trackNumber,
-        title:     t.trackName,
-        duration:  t.trackTimeMillis,
-        itunesUrl: t.trackViewUrl,
-      }));
+    const album = formatAlbum(sp);
+    album.tracks = (sp.tracks?.items || []).map((t, i) => ({
+      number:    t.track_number || i + 1,
+      title:     t.name,
+      duration:  t.duration_ms,
+      itunesUrl: t.external_urls?.spotify || '',
+    }));
 
-    const album = { ...formatAlbum(collection), tracks };
-
-    // Attach review stats from our DB
-    const dbRow = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.id);
+    // Attach review stats
+    const dbRow = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(id);
     if (dbRow) {
-      const stats = db.prepare(`
+      album.stats = db.prepare(`
         SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg,
-               SUM(CASE WHEN rating=5   THEN 1 ELSE 0 END) as r5,
-               SUM(CASE WHEN rating=4.5 THEN 1 ELSE 0 END) as r4h,
-               SUM(CASE WHEN rating=4   THEN 1 ELSE 0 END) as r4,
-               SUM(CASE WHEN rating=3.5 THEN 1 ELSE 0 END) as r3h,
-               SUM(CASE WHEN rating=3   THEN 1 ELSE 0 END) as r3,
+               SUM(CASE WHEN rating=5    THEN 1 ELSE 0 END) as r5,
+               SUM(CASE WHEN rating=4.5  THEN 1 ELSE 0 END) as r4h,
+               SUM(CASE WHEN rating=4    THEN 1 ELSE 0 END) as r4,
+               SUM(CASE WHEN rating=3.5  THEN 1 ELSE 0 END) as r3h,
+               SUM(CASE WHEN rating=3    THEN 1 ELSE 0 END) as r3,
                SUM(CASE WHEN rating<=2.5 THEN 1 ELSE 0 END) as rLow
         FROM reviews WHERE album_id=?
       `).get(dbRow.id);
-      album.stats = stats;
     } else {
       album.stats = { total: 0, avg: null };
     }
@@ -497,19 +542,41 @@ app.post('/api/dsp/import', async (req, res) => {
   try {
     // ── Spotify ──────────────────────────────────────────
     if (url.includes('open.spotify.com') || url.includes('spotify.com')) {
-      const oe = await cachedFetch(
-        `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`,
-        CACHE_1H
-      );
-      // Spotify oEmbed title format: "Album Name by Artist" or just "Track Name"
-      let title = oe.title || '';
-      let artist = '';
-      if (title.includes(' by ')) {
-        const idx = title.lastIndexOf(' by ');
-        artist = title.slice(idx + 4).trim();
-        title  = title.slice(0, idx).trim();
+      // Extract type + ID from URL: open.spotify.com/{type}/{id}
+      const spMatch = url.match(/open\.spotify\.com\/(album|track|playlist)\/([A-Za-z0-9]+)/);
+      if (spMatch) {
+        const [, spType, spId] = spMatch;
+        try {
+          const sp = await spotifyFetch(`/${spType}s/${spId}`, CACHE_1H);
+          if (spType === 'album') {
+            return res.json({ dsp: 'Spotify', ...formatAlbum(sp) });
+          }
+          if (spType === 'track') {
+            return res.json({
+              dsp:    'Spotify',
+              itunesId: sp.id,
+              title:  sp.name,
+              artist: sp.artists?.map(a => a.name).join(', ') || '',
+              artwork: sp.album?.images?.[0]?.url || '',
+              year:   sp.album?.release_date ? parseInt(sp.album.release_date.slice(0,4),10) : null,
+              itunesUrl: sp.external_urls?.spotify || '',
+              mediaType: 'Track',
+            });
+          }
+          // Playlist — just return title/artwork
+          return res.json({
+            dsp:    'Spotify',
+            title:  sp.name,
+            artist: sp.owner?.display_name || '',
+            artwork: sp.images?.[0]?.url || '',
+            year:   null,
+            itunesUrl: sp.external_urls?.spotify || '',
+          });
+        } catch (e) {
+          return res.status(422).json({ error: `Spotify lookup failed: ${e.message}` });
+        }
       }
-      return res.json({ dsp: 'Spotify', title, artist, artwork: oe.thumbnail_url || '', year: null, embedHtml: oe.html });
+      return res.status(422).json({ error: 'Could not parse Spotify URL' });
     }
 
     // ── Apple Music ──────────────────────────────────────
