@@ -165,24 +165,57 @@ const CACHE_5M = 5  * 60 * 1000;
 const SPOTIFY_CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID     || '671ec2ef78314d90bf3a765a8cc53aa5';
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '2317e36fc8b742eba75c71b747b7bf1b';
 
-let spotifyToken    = null;
-let spotifyTokenExp = 0;
+// Client Credentials token (app-level, no playlist access)
+let ccToken    = null;
+let ccTokenExp = 0;
 
-async function getSpotifyToken() {
-  if (spotifyToken && Date.now() < spotifyTokenExp - 30000) return spotifyToken;
+async function getClientCredToken() {
+  if (ccToken && Date.now() < ccTokenExp - 30000) return ccToken;
   const resp = await fetch('https://accounts.spotify.com/api/token', {
-    method:  'POST',
+    method: 'POST',
     headers: {
       'Content-Type':  'application/x-www-form-urlencoded',
       'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
     },
     body: 'grant_type=client_credentials',
   });
-  if (!resp.ok) throw new Error(`Spotify auth failed: ${resp.status}`);
+  if (!resp.ok) throw new Error(`Spotify CC auth failed: ${resp.status}`);
   const data = await resp.json();
-  spotifyToken    = data.access_token;
-  spotifyTokenExp = Date.now() + data.expires_in * 1000;
-  return spotifyToken;
+  ccToken    = data.access_token;
+  ccTokenExp = Date.now() + data.expires_in * 1000;
+  return ccToken;
+}
+
+// OAuth User Token (needed for playlist access)
+// Loaded from env var set during one-time /spotify-setup flow
+let oauthToken       = null;
+let oauthTokenExp    = 0;
+let oauthRefreshToken = process.env.SPOTIFY_REFRESH_TOKEN || null;
+
+async function refreshOAuthToken() {
+  if (!oauthRefreshToken) return null;
+  if (oauthToken && Date.now() < oauthTokenExp - 30000) return oauthToken;
+  const resp = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
+    },
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(oauthRefreshToken)}`,
+  });
+  if (!resp.ok) { console.error('OAuth refresh failed:', resp.status); return null; }
+  const data = await resp.json();
+  oauthToken    = data.access_token;
+  oauthTokenExp = Date.now() + data.expires_in * 1000;
+  if (data.refresh_token) oauthRefreshToken = data.refresh_token; // rotating token
+  return oauthToken;
+}
+
+// Returns best available token — OAuth if set up, else Client Credentials
+async function getSpotifyToken() {
+  const ot = await refreshOAuthToken();
+  if (ot) return ot;
+  return getClientCredToken();
 }
 
 async function spotifyFetch(path, ttl = CACHE_1H) {
@@ -190,14 +223,83 @@ async function spotifyFetch(path, ttl = CACHE_1H) {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.ts < ttl) return hit.data;
   const token = await getSpotifyToken();
-  const res = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Spotify ${res.status} for ${url}`);
   const data = await res.json();
   cache.set(url, { data, ts: Date.now() });
   return data;
 }
+
+// ── Spotify OAuth Setup (one-time, owner only) ──────────────
+// Spotify editorial playlist IDs
+const SP_PLAYLISTS = {
+  trending:    '37i9dQZEVXbMDoHDwVN2tF', // Today's Top Hits
+  'Hip-Hop':   '37i9dQZEVXbbd7dn65ioTE', // RapCaviar
+  'Pop':       '37i9dQZEVXbNG2KDcFcKOF', // Pop Rising
+  'R&B':       '37i9dQZEVXbKGcyg6TFGx6', // Most Necessary
+  'Rock':      '37i9dQZEVXbepT6aZMCxlN', // Rock This
+  'Country':   '37i9dQZEVXbdjFlu5O5E7r', // Hot Country
+  'Electronic':'37i9dQZEVXbIQnj7RRhdSX', // Mint
+  'Latin':     '37i9dQZEVXbIiRch01XQyj', // Viva Latino
+  'Indie':     '37i9dQZEVXbqZVMVMEHJkK', // Indie Pop
+  'Jazz':      '37i9dQZEVXbIiRch01XQyj', // Jazz Vibes (fallback to Latin for now; swap if desired)
+  'Classical': '37i9dQZEVXbIVYVBNw9D5K', // Classical Essentials
+  'K-Pop':     '37i9dQZEVXbJZyENOWUFo7', // K-Pop Daebak
+  'Folk':      '37i9dQZEVXbpuMBjb99PqW', // Folk & Friends
+  'Metal':     '37i9dQZEVXbIPWwFssbupI', // Metal Essentials
+};
+
+const SETUP_SECRET = process.env.SPOTIFY_SETUP_SECRET || 'soundbagd-setup-2026';
+
+// Step 1 — redirect owner to Spotify login
+app.get('/spotify-setup', (req, res) => {
+  if (req.query.secret !== SETUP_SECRET) return res.status(403).send('Forbidden');
+  const redirect = `${req.protocol}://${req.headers.host}/spotify-callback`;
+  const scope    = 'playlist-read-public playlist-read-collaborative';
+  const url = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
+    client_id:     SPOTIFY_CLIENT_ID,
+    response_type: 'code',
+    redirect_uri:  redirect,
+    scope,
+    show_dialog:   'true',
+  });
+  res.redirect(url);
+});
+
+// Step 2 — Spotify redirects back here with auth code
+app.get('/spotify-callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error || !code) return res.status(400).send(`Spotify auth error: ${error}`);
+  const redirect = `${req.protocol}://${req.headers.host}/spotify-callback`;
+  try {
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64'),
+      },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirect }),
+    });
+    const data = await resp.json();
+    if (!data.refresh_token) return res.status(500).send('No refresh token returned: ' + JSON.stringify(data));
+    // Store in memory for this session
+    oauthRefreshToken = data.refresh_token;
+    oauthToken        = data.access_token;
+    oauthTokenExp     = Date.now() + data.expires_in * 1000;
+    res.send(`
+      <h2 style="font-family:sans-serif;padding:40px">✅ Spotify OAuth connected!</h2>
+      <p style="font-family:sans-serif;padding:0 40px">
+        Add this as a Railway environment variable to make it permanent:<br><br>
+        <code style="background:#111;color:#1DB954;padding:12px 16px;border-radius:6px;display:inline-block;font-size:14px;user-select:all">
+          SPOTIFY_REFRESH_TOKEN=${data.refresh_token}
+        </code><br><br>
+        Then redeploy on Railway. Playlist data will activate automatically.
+      </p>
+    `);
+  } catch (err) {
+    res.status(500).send('Token exchange failed: ' + err.message);
+  }
+});
 
 // Generic cached fetch (kept for DSP oEmbed, YouTube, etc.)
 async function cachedFetch(url, ttl = CACHE_1H) {
@@ -349,8 +451,30 @@ function formatAppleAlbum(item) {
   };
 }
 
-// GET /api/music/trending — Apple Music Top 50 (stream-based chart)
+// GET /api/music/trending
+// Uses Spotify "Today's Top Hits" playlist if OAuth is set up, else Apple RSS
 app.get('/api/music/trending', async (req, res) => {
+  // ── Spotify path (OAuth token available) ──
+  if (oauthRefreshToken) {
+    try {
+      const data = await spotifyFetch(
+        `/playlists/${SP_PLAYLISTS.trending}/tracks?limit=50&market=US`,
+        CACHE_1H
+      );
+      const seen = new Set();
+      const albums = [];
+      for (const { track } of (data.items || [])) {
+        if (!track?.album?.id || seen.has(track.album.id)) continue;
+        seen.add(track.album.id);
+        albums.push(formatAlbum(track.album));
+      }
+      return res.json(albums);
+    } catch (err) {
+      console.error('Spotify trending error, falling back to Apple:', err.message);
+    }
+  }
+
+  // ── Apple RSS fallback ──
   try {
     const data = await cachedFetch(
       'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
@@ -374,11 +498,35 @@ app.get('/api/music/trending', async (req, res) => {
 });
 
 // GET /api/music/genre-chart?genre=Hip-Hop&limit=25
-// iTunes genreTerm search — each genre returns genuinely different results
+// Uses Spotify editorial playlist if OAuth set up, else iTunes genreTerm search
 app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
+  const lim = Math.min(Number(limit), 50);
 
+  // ── Spotify path (OAuth token + matching playlist available) ──
+  const playlistId = SP_PLAYLISTS[genre];
+  if (oauthRefreshToken && playlistId) {
+    try {
+      const data = await spotifyFetch(
+        `/playlists/${playlistId}/tracks?limit=50&market=US`,
+        CACHE_1H
+      );
+      const seen = new Set();
+      const albums = [];
+      for (const { track } of (data.items || [])) {
+        if (!track?.album?.id || seen.has(track.album.id)) continue;
+        seen.add(track.album.id);
+        albums.push(formatAlbum(track.album));
+        if (albums.length >= lim) break;
+      }
+      return res.json(albums);
+    } catch (err) {
+      console.error(`Spotify genre chart (${genre}) error, falling back to iTunes:`, err.message);
+    }
+  }
+
+  // ── iTunes genreTerm fallback ──
   const genreTermMap = {
     'Country':    'Country',
     'Hip-Hop':    'Hip-Hop/Rap',
@@ -395,8 +543,6 @@ app.get('/api/music/genre-chart', async (req, res) => {
     'K-Pop':      'K-Pop',
   };
   const term = genreTermMap[genre] || genre;
-  const lim  = Math.min(Number(limit), 50);
-
   try {
     const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${lim}&country=us`;
     const data = await cachedFetch(url, CACHE_1H);
@@ -411,10 +557,34 @@ app.get('/api/music/genre-chart', async (req, res) => {
 });
 
 // GET /api/music/new-releases?limit=50
-// iTunes date-sorted recent releases — distinct from trending
+// Spotify New Music Friday playlist (OAuth) or Apple iTunes fallback
+const SP_NEW_MUSIC_FRIDAY = '37i9dQZF1DX4JAvHpjipBk'; // New Music Friday (US)
 app.get('/api/music/new-releases', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 50);
-  const year  = new Date().getFullYear();
+
+  // ── Spotify path ──
+  if (oauthRefreshToken) {
+    try {
+      const data = await spotifyFetch(
+        `/playlists/${SP_NEW_MUSIC_FRIDAY}/tracks?limit=50&market=US`,
+        CACHE_1H
+      );
+      const seen = new Set();
+      const albums = [];
+      for (const { track } of (data.items || [])) {
+        if (!track?.album?.id || seen.has(track.album.id)) continue;
+        seen.add(track.album.id);
+        albums.push(formatAlbum(track.album));
+        if (albums.length >= limit) break;
+      }
+      return res.json(albums);
+    } catch (err) {
+      console.error('Spotify new releases error, falling back to iTunes:', err.message);
+    }
+  }
+
+  // ── Apple iTunes fallback ──
+  const year = new Date().getFullYear();
   try {
     const url  = `https://itunes.apple.com/search?term=${year}+new+releases&entity=album&limit=${limit}&country=us`;
     const data = await cachedFetch(url, CACHE_1H);
