@@ -326,29 +326,61 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 // ── MUSIC ROUTES (Spotify Web API) ─────────────────────────
 
-// Spotify Global Top 50 playlist ID (official, updated daily)
-const SPOTIFY_GLOBAL_TOP50 = '37i9dQZEVXbMDoHDwVN2tF';
+// GET /api/music/trending
+// Spotify Client Credentials cannot access playlists, so we:
+// 1. Search across popular genres for 2025/2026 albums (parallel)
+// 2. Batch-fetch full album objects to get real popularity scores
+// 3. Sort by popularity desc, return top 50 unique albums
+const CACHE_6H = 6 * 60 * 60 * 1000;
 
-// GET /api/music/trending — Spotify Global Top 50
 app.get('/api/music/trending', async (req, res) => {
   try {
-    // Pull tracks from Global Top 50, deduplicate by album, return top 50 unique albums
-    const data = await spotifyFetch(
-      `/playlists/${SPOTIFY_GLOBAL_TOP50}/tracks?limit=50&fields=items(track(album(id,name,artists,images,release_date,external_urls,total_tracks,album_type),popularity))`,
-      CACHE_1H
+    const year  = new Date().getFullYear();
+    const terms = [
+      `year:${year}`,
+      `year:${year - 1}`,
+      'top hits',
+      'hip-hop',
+      'pop',
+      'r-n-b',
+    ];
+
+    // Run all searches in parallel
+    const searches = await Promise.allSettled(
+      terms.map(t =>
+        spotifyFetch(`/search?q=${encodeURIComponent(t)}&type=album&limit=50&market=US`, CACHE_6H)
+      )
     );
 
-    const seen   = new Set();
-    const albums = [];
-    for (const { track } of (data.items || [])) {
-      if (!track?.album?.id || seen.has(track.album.id)) continue;
-      seen.add(track.album.id);
-      const a = formatAlbum(track.album);
-      a.popularity = track.popularity;
-      albums.push(a);
+    // Collect unique album IDs
+    const seen = new Set();
+    const ids  = [];
+    for (const s of searches) {
+      if (s.status !== 'fulfilled') continue;
+      for (const a of (s.value.albums?.items || [])) {
+        if (a?.id && !seen.has(a.id)) { seen.add(a.id); ids.push(a.id); }
+      }
     }
 
-    res.json(albums);
+    // Batch-fetch full album objects (20 per request) for popularity scores
+    const chunks = [];
+    for (let i = 0; i < Math.min(ids.length, 100); i += 20)
+      chunks.push(ids.slice(i, i + 20));
+
+    const fullAlbums = (
+      await Promise.all(
+        chunks.map(chunk =>
+          spotifyFetch(`/albums?ids=${chunk.join(',')}&market=US`, CACHE_6H)
+            .then(d => d.albums || [])
+            .catch(() => [])
+        )
+      )
+    ).flat().filter(a => a?.id);
+
+    // Sort by Spotify popularity score (0-100) descending
+    fullAlbums.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+    res.json(fullAlbums.slice(0, 50).map(formatAlbum));
   } catch (err) {
     console.error('Trending error:', err.message);
     res.status(500).json({ error: 'Could not load trending' });
@@ -360,7 +392,6 @@ app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
 
-  // Map display names → Spotify genre seed / search terms
   const genreMap = {
     'Country':    'country',
     'Hip-Hop':    'hip-hop',
@@ -377,17 +408,41 @@ app.get('/api/music/genre-chart', async (req, res) => {
     'K-Pop':      'k-pop',
   };
   const term = genreMap[genre] || genre.toLowerCase();
+  const lim  = Math.min(Number(limit), 50);
 
   try {
-    const lim  = Math.min(Number(limit), 50);
-    const data = await spotifyFetch(
-      `/search?q=genre%3A${encodeURIComponent(term)}&type=album&limit=${lim}&market=US`,
-      CACHE_1H
-    );
-    const albums = (data.albums?.items || [])
-      .filter(a => a && a.id)
-      .map(formatAlbum);
-    res.json(albums);
+    // Two parallel searches: genre filter + genre keyword for broader coverage
+    const [g1, g2] = await Promise.allSettled([
+      spotifyFetch(`/search?q=genre%3A${encodeURIComponent(term)}&type=album&limit=50&market=US`, CACHE_1H),
+      spotifyFetch(`/search?q=${encodeURIComponent(genre)}+music&type=album&limit=50&market=US`, CACHE_1H),
+    ]);
+
+    const seen = new Set();
+    const ids  = [];
+    for (const s of [g1, g2]) {
+      if (s.status !== 'fulfilled') continue;
+      for (const a of (s.value.albums?.items || [])) {
+        if (a?.id && !seen.has(a.id)) { seen.add(a.id); ids.push(a.id); }
+      }
+    }
+
+    // Batch-fetch full albums for popularity, then sort
+    const chunks = [];
+    for (let i = 0; i < Math.min(ids.length, 60); i += 20)
+      chunks.push(ids.slice(i, i + 20));
+
+    const fullAlbums = (
+      await Promise.all(
+        chunks.map(chunk =>
+          spotifyFetch(`/albums?ids=${chunk.join(',')}&market=US`, CACHE_1H)
+            .then(d => d.albums || [])
+            .catch(() => [])
+        )
+      )
+    ).flat().filter(a => a?.id);
+
+    fullAlbums.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    res.json(fullAlbums.slice(0, lim).map(formatAlbum));
   } catch (err) {
     console.error('Genre chart error:', err.message);
     res.status(500).json({ error: 'Could not load genre chart' });
