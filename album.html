@@ -115,12 +115,13 @@
         <div style="height:60px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div>
       </div>
 
-      <!-- Apple Music link -->
+      <!-- Spotify link -->
       <div id="listenOnCard" style="display:none;margin-bottom:24px">
         <a id="listenOnLink" href="#" target="_blank" rel="noopener"
           class="btn btn--ghost" style="width:100%;justify-content:center;gap:8px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          Listen on Apple Music
+          <!-- Spotify logo mark -->
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          Listen on Spotify
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
       </div>
@@ -360,8 +361,8 @@ function renderAlbumHeader(a) {
         </button>
         ${a.itunesUrl ? `
           <a href="${escHtml(a.itunesUrl)}" target="_blank" rel="noopener" class="btn btn--ghost">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            Apple Music
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+            Listen on Spotify
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>` : ''}
         <button class="btn btn--ghost" onclick="openDspModal()">
@@ -371,7 +372,7 @@ function renderAlbumHeader(a) {
       </div>
     </div>`;
 
-  // Update Apple Music listen card
+  // Update Spotify listen card
   if (a.itunesUrl) {
     document.getElementById('listenOnCard').style.display = '';
     document.getElementById('listenOnLink').href = a.itunesUrl;
@@ -387,7 +388,7 @@ function renderTracklist(a) {
     <div class="track-item">
       <span class="track-item__num">${t.number || ''}</span>
       <span class="track-item__title">${escHtml(t.title)}</span>
-      ${t.itunesUrl ? `<a href="${escHtml(t.itunesUrl)}" target="_blank" rel="noopener" class="text-xs muted" style="margin-left:auto;padding-right:12px;transition:var(--transition)" title="Open in Apple Music" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color=''">♫</a>` : '<span style="margin-left:auto"></span>'}
+      ${t.itunesUrl ? `<a href="${escHtml(t.itunesUrl)}" target="_blank" rel="noopener" class="text-xs muted" style="margin-left:auto;padding-right:12px;transition:var(--transition)" title="Open in Spotify" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color=''">♫</a>` : '<span style="margin-left:auto"></span>'}
       <span class="track-item__duration">${ms(t.duration)}</span>
     </div>`).join('');
 }
