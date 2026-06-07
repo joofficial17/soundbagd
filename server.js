@@ -452,140 +452,123 @@ function formatAppleAlbum(item) {
   };
 }
 
-// GET /api/music/trending
-// Uses Spotify "Today's Top Hits" playlist if OAuth is set up, else Apple RSS
-app.get('/api/music/trending', async (req, res) => {
-  // ── Spotify path (OAuth token available) ──
-  if (oauthRefreshToken) {
-    try {
-      const data = await spotifyFetch(
-        `/playlists/${SP_PLAYLISTS.trending}/tracks?limit=50&market=US`,
-        CACHE_1H
-      );
-      const seen = new Set();
-      const albums = [];
-      for (const { track } of (data.items || [])) {
-        if (!track?.album?.id || seen.has(track.album.id)) continue;
-        seen.add(track.album.id);
-        albums.push(formatAlbum(track.album));
-      }
-      return res.json(albums);
-    } catch (err) {
-      console.error('Spotify trending error, falling back to Apple:', err.message);
-    }
-  }
+// ── Deezer helpers (free public API, no auth needed) ─────────
+const DEEZER_GENRE_IDS = {
+  'Hip-Hop':    116,
+  'Pop':        132,
+  'R&B':        165,
+  'Rock':       152,
+  'Country':    84,
+  'Electronic': 106,
+  'Latin':      197,
+  'Indie':      85,
+  'Jazz':       129,
+  'Classical':  98,
+  'Metal':      464,
+  'K-Pop':      113, // Dance/K-Pop closest match
+  'Folk':       466,
+};
 
-  // ── Apple RSS fallback ──
+function formatDeezerTrack(t) {
+  // Extract unique album from a Deezer track object
+  return {
+    itunesId:  String(t.album?.id || t.id),
+    title:     t.album?.title || t.title,
+    artist:    t.artist?.name || '',
+    artwork:   t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '',
+    year:      null, // not in chart response; skip
+    genre:     '',
+    mediaType: 'Album',
+    itunesUrl: t.album?.link || t.link || '',
+    rank:      t.rank || 0,
+  };
+}
+
+async function deezerFetch(path, ttl = CACHE_1H) {
+  return cachedFetch('https://api.deezer.com' + path, ttl);
+}
+
+// GET /api/music/trending — Deezer global top 50 tracks → unique albums
+app.get('/api/music/trending', async (req, res) => {
   try {
-    const data = await cachedFetch(
-      'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
-      CACHE_1H
-    );
-    const albums = (data.feed?.results || []).map(item => ({
-      itunesId:  String(item.id),
-      title:     item.name,
-      artist:    item.artistName,
-      artwork:   artworkHQ(item.artworkUrl100),
-      year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
-      genre:     item.genres?.[0]?.name || '',
-      mediaType: 'Album',
-      itunesUrl: item.url || '',
-    }));
+    const data = await deezerFetch('/chart/0/tracks?limit=50');
+    const seen = new Set();
+    const albums = [];
+    for (const t of (data.data || [])) {
+      const aid = t.album?.id;
+      if (!aid || seen.has(aid)) continue;
+      seen.add(aid);
+      albums.push(formatDeezerTrack(t));
+    }
     res.json(albums);
   } catch (err) {
     console.error('Trending error:', err.message);
-    res.status(500).json({ error: 'Could not load trending' });
+    // Apple RSS fallback
+    try {
+      const data = await cachedFetch(
+        'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
+        CACHE_1H
+      );
+      res.json((data.feed?.results || []).map(item => ({
+        itunesId: String(item.id), title: item.name, artist: item.artistName,
+        artwork: artworkHQ(item.artworkUrl100), year: null, genre: '',
+        mediaType: 'Album', itunesUrl: item.url || '',
+      })));
+    } catch { res.status(500).json({ error: 'Could not load trending' }); }
   }
 });
 
 // GET /api/music/genre-chart?genre=Hip-Hop&limit=25
-// Uses Spotify editorial playlist if OAuth set up, else iTunes genreTerm search
+// Deezer genre-specific chart → unique albums, iTunes fallback
 app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
   const lim = Math.min(Number(limit), 50);
 
-  // ── Spotify path (OAuth token + matching playlist available) ──
-  const playlistId = SP_PLAYLISTS[genre];
-  if (oauthRefreshToken && playlistId) {
+  const genreId = DEEZER_GENRE_IDS[genre];
+  if (genreId) {
     try {
-      const data = await spotifyFetch(
-        `/playlists/${playlistId}/tracks?limit=50&market=US`,
-        CACHE_1H
-      );
+      const data = await deezerFetch(`/chart/${genreId}/tracks?limit=50`);
       const seen = new Set();
       const albums = [];
-      for (const { track } of (data.items || [])) {
-        if (!track?.album?.id || seen.has(track.album.id)) continue;
-        seen.add(track.album.id);
-        albums.push(formatAlbum(track.album));
+      for (const t of (data.data || [])) {
+        const aid = t.album?.id;
+        if (!aid || seen.has(aid)) continue;
+        seen.add(aid);
+        albums.push(formatDeezerTrack(t));
         if (albums.length >= lim) break;
       }
-      return res.json(albums);
+      if (albums.length) return res.json(albums);
     } catch (err) {
-      console.error(`Spotify genre chart (${genre}) error, falling back to iTunes:`, err.message);
+      console.error(`Deezer genre chart (${genre}) error:`, err.message);
     }
   }
 
   // ── iTunes genreTerm fallback ──
   const genreTermMap = {
-    'Country':    'Country',
-    'Hip-Hop':    'Hip-Hop/Rap',
-    'Pop':        'Pop',
-    'R&B':        'R&B/Soul',
-    'Rock':       'Rock',
-    'Jazz':       'Jazz',
-    'Electronic': 'Electronic',
-    'Indie':      'Alternative',
-    'Folk':       'Folk',
-    'Latin':      'Latino',
-    'Classical':  'Classical',
-    'Metal':      'Metal',
+    'Country':    'Country',    'Hip-Hop':    'Hip-Hop/Rap',
+    'Pop':        'Pop',        'R&B':        'R&B/Soul',
+    'Rock':       'Rock',       'Jazz':       'Jazz',
+    'Electronic': 'Electronic', 'Indie':      'Alternative',
+    'Folk':       'Folk',       'Latin':      'Latino',
+    'Classical':  'Classical',  'Metal':      'Metal',
     'K-Pop':      'K-Pop',
   };
   const term = genreTermMap[genre] || genre;
   try {
     const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${lim}&country=us`;
     const data = await cachedFetch(url, CACHE_1H);
-    const albums = (data.results || [])
-      .filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection')
-      .map(formatAppleAlbum);
-    res.json(albums);
+    res.json((data.results || []).filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection').map(formatAppleAlbum));
   } catch (err) {
     console.error('Genre chart error:', err.message);
     res.status(500).json({ error: 'Could not load genre chart' });
   }
 });
 
-// GET /api/music/new-releases?limit=50
-// Spotify New Music Friday playlist (OAuth) or Apple iTunes fallback
-const SP_NEW_MUSIC_FRIDAY = '37i9dQZF1DX4JAvHpjipBk'; // New Music Friday (US)
+// GET /api/music/new-releases?limit=50 — Apple iTunes (date-sorted)
 app.get('/api/music/new-releases', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 50);
-
-  // ── Spotify path ──
-  if (oauthRefreshToken) {
-    try {
-      const data = await spotifyFetch(
-        `/playlists/${SP_NEW_MUSIC_FRIDAY}/tracks?limit=50&market=US`,
-        CACHE_1H
-      );
-      const seen = new Set();
-      const albums = [];
-      for (const { track } of (data.items || [])) {
-        if (!track?.album?.id || seen.has(track.album.id)) continue;
-        seen.add(track.album.id);
-        albums.push(formatAlbum(track.album));
-        if (albums.length >= limit) break;
-      }
-      return res.json(albums);
-    } catch (err) {
-      console.error('Spotify new releases error, falling back to iTunes:', err.message);
-    }
-  }
-
-  // ── Apple iTunes fallback ──
-  const year = new Date().getFullYear();
+  const year  = new Date().getFullYear();
   try {
     const url  = `https://itunes.apple.com/search?term=${year}+new+releases&entity=album&limit=${limit}&country=us`;
     const data = await cachedFetch(url, CACHE_1H);
