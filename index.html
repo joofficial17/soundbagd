@@ -17,6 +17,7 @@
       <li><a href="index.html" class="active">Explore</a></li>
       <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
       <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
+      <li><a href="recommendations.html">For You</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -68,10 +69,39 @@
       <h2 class="h4">🔥 Trending Right Now</h2>
       <span class="text-xs muted" id="trendingSource">Loading from Apple Music Charts…</span>
     </div>
-    <!-- Trending strip — populated by JS -->
+    <!-- Trending strip — grid: 3 rows × N columns, scrolls horizontally -->
     <div class="trending-strip" id="trendingStrip">
-      <!-- 8 skeleton cards -->
-      <div style="min-width:160px;flex-shrink:0">${Array(8).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('</div><div style="min-width:160px;flex-shrink:0">')}</div>
+      <!-- Skeleton cards (24 = 3 rows × 8 cols) -->
+      ${Array(24).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('')}
+    </div>
+  </div>
+</section>
+
+<!-- ── Browse by Genre ─────────────────────────────────────── -->
+<section class="section" id="genreBrowseSection" style="background:var(--bg-card)">
+  <div class="container">
+    <div class="section__header" style="margin-bottom:16px">
+      <h2 class="h4">🎸 Browse by Genre</h2>
+      <span id="genreActiveLabel" class="text-xs muted"></span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px" id="genreTags">
+      <button class="tag tag--gold" onclick="filterGenre(this,'')">All Genres</button>
+      <button class="tag" onclick="filterGenre(this,'Country')">Country</button>
+      <button class="tag" onclick="filterGenre(this,'Hip-Hop')">Hip-Hop</button>
+      <button class="tag" onclick="filterGenre(this,'Pop')">Pop</button>
+      <button class="tag" onclick="filterGenre(this,'R&B')">R&amp;B / Soul</button>
+      <button class="tag" onclick="filterGenre(this,'Rock')">Rock</button>
+      <button class="tag" onclick="filterGenre(this,'Jazz')">Jazz</button>
+      <button class="tag" onclick="filterGenre(this,'Electronic')">Electronic</button>
+      <button class="tag" onclick="filterGenre(this,'Indie')">Indie</button>
+      <button class="tag" onclick="filterGenre(this,'Folk')">Folk</button>
+      <button class="tag" onclick="filterGenre(this,'Latin')">Latin</button>
+      <button class="tag" onclick="filterGenre(this,'Classical')">Classical</button>
+      <button class="tag" onclick="filterGenre(this,'Metal')">Metal</button>
+      <button class="tag" onclick="filterGenre(this,'K-Pop')">K-Pop</button>
+    </div>
+    <div id="genreResults" style="display:none">
+      <div class="grid-albums grid-albums--lg" id="genreGrid"></div>
     </div>
   </div>
 </section>
@@ -106,31 +136,6 @@
           <div id="popularList">
             <!-- Populated by JS from trending data -->
             <div style="color:var(--text-muted);font-size:.85rem;padding:12px 0">Loading charts…</div>
-          </div>
-        </div>
-
-        <!-- Browse by genre -->
-        <div>
-          <h2 class="h4" style="margin-bottom:14px">Browse by Genre</h2>
-          <div style="display:flex;flex-wrap:wrap;gap:8px" id="genreTags">
-            <button class="tag tag--gold" onclick="filterGenre(this,'')">All</button>
-            <button class="tag" onclick="filterGenre(this,'Country')">Country</button>
-            <button class="tag" onclick="filterGenre(this,'Hip-Hop')">Hip-Hop</button>
-            <button class="tag" onclick="filterGenre(this,'Pop')">Pop</button>
-            <button class="tag" onclick="filterGenre(this,'R&B')">R&amp;B / Soul</button>
-            <button class="tag" onclick="filterGenre(this,'Rock')">Rock</button>
-            <button class="tag" onclick="filterGenre(this,'Jazz')">Jazz</button>
-            <button class="tag" onclick="filterGenre(this,'Electronic')">Electronic</button>
-            <button class="tag" onclick="filterGenre(this,'Indie')">Indie</button>
-            <button class="tag" onclick="filterGenre(this,'Folk')">Folk</button>
-            <button class="tag" onclick="filterGenre(this,'Latin')">Latin</button>
-            <button class="tag" onclick="filterGenre(this,'Classical')">Classical</button>
-            <button class="tag" onclick="filterGenre(this,'Metal')">Metal</button>
-            <button class="tag" onclick="filterGenre(this,'K-Pop')">K-Pop</button>
-          </div>
-          <!-- Genre results -->
-          <div id="genreResults" style="margin-top:20px;display:none">
-            <div class="grid-albums" id="genreGrid"></div>
           </div>
         </div>
 
@@ -205,11 +210,9 @@ async function loadTrending() {
     const albums = await api.get('/api/music/trending');
     _allTrending = albums;
 
-    // Trending strip
+    // Trending strip — grid layout (3 rows × N cols, scrolls horizontally)
     const strip = document.getElementById('trendingStrip');
-    strip.innerHTML = albums.map(a =>
-      `<div style="min-width:160px;flex-shrink:0">${albumCardHtml(a)}</div>`
-    ).join('');
+    strip.innerHTML = albums.map(a => albumCardHtml(a)).join('');
 
     // Popular sidebar (top 5)
     const list = document.getElementById('popularList');
@@ -223,14 +226,14 @@ async function loadTrending() {
         </div>
       </div>`).join('');
 
-    // New Releases grid (next 10 from trending)
+    // New Releases grid
     const grid = document.getElementById('newReleasesGrid');
     grid.innerHTML = albums.slice(0, 10).map(a => albumCardHtml(a)).join('');
 
     document.getElementById('trendingSource').textContent = 'Apple Music Most Played';
   } catch (err) {
     document.getElementById('trendingStrip').innerHTML =
-      `<div style="color:var(--text-muted);padding:20px;font-size:.875rem">Could not load trending — is the server running at localhost:3000?</div>`;
+      `<div style="grid-column:span 3;color:var(--text-muted);padding:20px;font-size:.875rem">Could not load trending — is the server running?</div>`;
   }
 }
 
@@ -283,25 +286,38 @@ function filterGenre(btn, genre) {
   });
   btn.classList.remove('tag'); btn.classList.add('tag--gold');
 
-  const resultsEl = document.getElementById('genreResults');
-  const gridEl    = document.getElementById('genreGrid');
+  const resultsEl   = document.getElementById('genreResults');
+  const gridEl      = document.getElementById('genreGrid');
+  const labelEl     = document.getElementById('genreActiveLabel');
 
-  if (!genre) { resultsEl.style.display = 'none'; return; }
+  if (!genre) {
+    resultsEl.style.display = 'none';
+    if (labelEl) labelEl.textContent = '';
+    return;
+  }
 
+  // Show full-width results
   resultsEl.style.display = '';
-  gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Searching…</div>';
+  if (labelEl) labelEl.textContent = `Showing ${genre} albums`;
+  gridEl.innerHTML = Array(8).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('');
+
+  // Scroll to genre section
+  document.getElementById('genreBrowseSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const genreId = genreIds[genre];
   const url = genreId
-    ? `/api/music/search?q=album&type=album&limit=12&genreId=${genreId}`
-    : `/api/music/search?q=${encodeURIComponent(genre)}+music&type=album&limit=12`;
+    ? `/api/music/search?q=album&type=album&limit=20&genreId=${genreId}`
+    : `/api/music/search?q=${encodeURIComponent(genre)}+music&type=album&limit=20`;
 
   api.get(url)
     .then(albums => {
-      gridEl.innerHTML = albums.map(a => albumCardHtml(a)).join('') ||
-        `<div style="color:var(--text-muted);font-size:.85rem">No results found.</div>`;
+      if (!albums.length) {
+        gridEl.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">No results found for ${escHtml(genre)}.</div>`;
+        return;
+      }
+      gridEl.innerHTML = albums.map(a => albumCardHtml(a)).join('');
     }).catch(() => {
-      gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Could not load results.</div>';
+      gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load results.</div>';
     });
 }
 </script>

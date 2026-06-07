@@ -416,12 +416,50 @@ h4, .h4 { font-size: 0.95rem; font-weight: 600; letter-spacing: 0.08em; text-tra
 
 /* ── Trending Strip ───────────────────────────────────────── */
 .trending-strip {
-  display: flex; gap: 16px;
+  display: grid;
+  grid-template-rows: repeat(3, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: 155px;
+  gap: 14px;
   overflow-x: auto;
-  padding-bottom: 8px;
-  scrollbar-width: none;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-raised) transparent;
 }
-.trending-strip::-webkit-scrollbar { display: none; }
+.trending-strip::-webkit-scrollbar { height: 4px; }
+.trending-strip::-webkit-scrollbar-thumb { background: var(--bg-raised); border-radius: 4px; }
+
+/* ── Mood Tags ─────────────────────────────────────────────── */
+.mood-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+  background: rgba(124,92,191,0.12);
+  border: 1px solid rgba(124,92,191,0.2);
+  color: var(--purple-light);
+  cursor: pointer; transition: var(--transition);
+}
+.mood-tag:hover, .mood-tag.selected {
+  background: rgba(124,92,191,0.25);
+  border-color: rgba(124,92,191,0.4);
+}
+
+/* ── Like Button ─────────────────────────────────────────── */
+.like-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 0.78rem; font-weight: 600;
+  border: 1px solid var(--border); color: var(--text-muted);
+  background: none; transition: var(--transition); cursor: pointer;
+}
+.like-btn:hover { border-color: var(--coral); color: var(--coral); }
+.like-btn.liked { border-color: var(--coral); color: var(--coral); background: rgba(255,107,107,0.08); }
+
+/* ── Comment Section ─────────────────────────────────────── */
+.comment-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.comment-item:last-child { border-bottom: none; }
+.comment-text { font-size: 0.85rem; line-height: 1.6; color: rgba(240,237,232,0.85); }
 
 /* ── Activity Feed ────────────────────────────────────────── */
 .feed { display: flex; flex-direction: column; gap: 16px; }

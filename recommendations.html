@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>For You · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
+      <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
+      <li><a href="recommendations.html" class="active">For You</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"><!-- injected by app.js --></div>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────── -->
+<section class="hero" style="padding:60px 0 40px">
+  <div class="container">
+    <div class="hero__eyebrow">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Personalized for You
+    </div>
+    <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.6rem)">
+      Music picked<br><em>just for your taste.</em>
+    </h1>
+    <p class="hero__sub" style="font-size:.95rem">
+      Based on the genres and artists you've rated highly, we've curated albums you're likely to love — with a note on <em>why</em> each one was picked.
+    </p>
+  </div>
+</section>
+
+<!-- ── Recommendations ─────────────────────────────────────── -->
+<div class="container" style="padding-bottom:80px">
+
+  <!-- Not logged in -->
+  <div id="loginPrompt" style="display:none;text-align:center;padding:60px 0">
+    <div style="font-size:3rem;margin-bottom:16px">🎧</div>
+    <h2 class="h2" style="margin-bottom:12px">Sign in to get recommendations</h2>
+    <p class="muted" style="margin-bottom:24px">Rate at least a few albums first, and we'll find music tailored to your taste.</p>
+    <button class="btn btn--gold" onclick="openAuthModal('login')">Sign In</button>
+    <button class="btn btn--ghost" style="margin-left:10px" onclick="openAuthModal('register')">Join Free</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingState" style="display:none;text-align:center;padding:60px 0;color:var(--text-muted)">
+    <div style="font-size:2rem;margin-bottom:12px;animation:pulse 1.5s ease infinite">🎵</div>
+    <div>Analyzing your music taste…</div>
+  </div>
+
+  <!-- No reviews yet -->
+  <div id="emptyState" style="display:none;text-align:center;padding:60px 0">
+    <div style="font-size:3rem;margin-bottom:16px">📀</div>
+    <h2 class="h2" style="margin-bottom:12px">Rate some music first!</h2>
+    <p class="muted" style="margin-bottom:24px;max-width:440px;margin-left:auto;margin-right:auto">
+      We need at least a few album ratings to understand your taste. The more you log, the better your recommendations get.
+    </p>
+    <a href="index.html" class="btn btn--gold">Explore &amp; Rate Albums</a>
+  </div>
+
+  <!-- Taste profile -->
+  <div id="tasteProfile" style="display:none;margin-bottom:32px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:600px">
+      <div class="card" style="padding:20px">
+        <h2 class="h4" style="margin-bottom:12px">Your Top Genres</h2>
+        <div id="topGenresList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="card" style="padding:20px">
+        <h2 class="h4" style="margin-bottom:12px">Favourite Artists</h2>
+        <div id="topArtistsList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results grid -->
+  <div id="recsContainer" style="display:none">
+    <div class="section__header" style="margin-bottom:24px">
+      <h2 class="h4">🌟 Recommended for You</h2>
+      <button class="btn btn--ghost btn--sm" onclick="initPage()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="grid-albums grid-albums--lg" id="recsGrid"></div>
+  </div>
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__logo">Soundbagd</div>
+    <div class="footer__links"><a href="index.html">← Explore</a></div>
+    <div class="footer__copy">Recommendations based on your listening history · © 2025 Soundbagd</div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+async function initPage() {
+  const user = auth.getUser();
+  if (!user) {
+    document.getElementById('loginPrompt').style.display = '';
+    return;
+  }
+
+  document.getElementById('loadingState').style.display = '';
+
+  try {
+    const data = await api.get(`/api/recommendations/${encodeURIComponent(user.username)}`);
+
+    document.getElementById('loadingState').style.display = 'none';
+
+    if (!data.recommendations?.length) {
+      document.getElementById('emptyState').style.display = '';
+      return;
+    }
+
+    // Taste profile
+    const tasteEl = document.getElementById('tasteProfile');
+    tasteEl.style.display = '';
+    if (data.topGenres?.length) {
+      document.getElementById('topGenresList').innerHTML = data.topGenres.map(g =>
+        `<span class="tag tag--gold">${escHtml(g)}</span>`
+      ).join('');
+    }
+    if (data.topArtists?.length) {
+      document.getElementById('topArtistsList').innerHTML = data.topArtists.map(a =>
+        `<span class="tag">${escHtml(a)}</span>`
+      ).join('');
+    }
+
+    // Recommendations grid
+    const container = document.getElementById('recsContainer');
+    container.style.display = '';
+    const grid = document.getElementById('recsGrid');
+    grid.innerHTML = data.recommendations.map(a => `
+      <div>
+        ${albumCardHtml(a)}
+        <div style="margin-top:8px;padding:10px 4px">
+          <div style="font-size:.78rem;font-weight:600;color:var(--gold);margin-bottom:3px">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:3px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            ${escHtml(a.reason)}
+          </div>
+          ${a.reasonDetail ? `<div class="text-xs muted" style="line-height:1.5">${escHtml(a.reasonDetail)}</div>` : ''}
+        </div>
+      </div>`).join('');
+
+  } catch (err) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('emptyState').style.display = '';
+    document.getElementById('emptyState').querySelector('h2').textContent = 'Could not load recommendations';
+    document.getElementById('emptyState').querySelector('p').textContent = err.message;
+  }
+}
+</script>
+</body>
+</html>

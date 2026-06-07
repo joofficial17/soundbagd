@@ -229,7 +229,10 @@ function albumCardHtml(album) {
 
 // ── Review Card HTML ───────────────────────────────────────
 function reviewCardHtml(r) {
-  const hasText = r.review_text?.trim();
+  const hasText  = r.review_text?.trim();
+  const tags     = r.tags ? r.tags.split(',').filter(Boolean) : [];
+  const likeCnt  = r.like_count || 0;
+  const isLiked  = r.is_liked || false;
   return `
     <div class="review-card">
       <div class="review-card__header">
@@ -246,9 +249,27 @@ function reviewCardHtml(r) {
         <div class="avatar" style="width:28px;height:28px;font-size:0.7rem;background:${escHtml(r.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)')}">${escHtml(r.initials || '?')}</div>
         <a href="profile.html?u=${encodeURIComponent(r.username)}" class="review-card__username" style="color:inherit">${escHtml(r.username)}</a>
         <span class="review-card__date">${relativeTime(r.created_at)}</span>
+        <button class="like-btn${isLiked ? ' liked' : ''}" style="margin-left:auto" onclick="toggleLike(${r.id || 0},this)">
+          ♥ <span class="like-count">${likeCnt}</span>
+        </button>
       </div>
       ${hasText ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
+      ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${tags.map(t => `<span class="mood-tag">#${escHtml(t)}</span>`).join('')}</div>` : ''}
     </div>`;
+}
+
+// ── Like toggle ────────────────────────────────────────────
+async function toggleLike(reviewId, btn) {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  if (!reviewId) return;
+  try {
+    const data = await api.post(`/api/reviews/${reviewId}/like`, {});
+    const countEl = btn.querySelector('.like-count');
+    if (countEl) countEl.textContent = data.count;
+    btn.classList.toggle('liked', data.liked);
+  } catch (err) {
+    showToast('Could not update like: ' + err.message);
+  }
 }
 
 // ── Skeleton Loader ────────────────────────────────────────
@@ -455,6 +476,16 @@ function injectReviewModal() {
         </div>
       </div>
 
+      <!-- Mood Tags -->
+      <div style="margin-top:16px">
+        <span class="modal__label">Mood Tags <span class="text-xs muted">(optional — pick any that fit)</span></span>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px" id="reviewMoodTags">
+          ${['rainy-day','late-night','road-trip','heartbreak','chill','workout','focus','party','study','motivation','nostalgic','ethereal'].map(t =>
+            `<button type="button" class="mood-tag" data-tag="${t}" onclick="toggleMoodTag(this)">#${t}</button>`
+          ).join('')}
+        </div>
+      </div>
+
       <!-- DSP Link -->
       <div style="margin-top:16px">
         <span class="modal__label" style="display:flex;align-items:center;gap:6px">
@@ -491,6 +522,16 @@ function injectReviewModal() {
   });
 }
 
+function toggleMoodTag(btn) {
+  btn.classList.toggle('selected');
+}
+
+function getSelectedMoodTags(containerId = 'reviewMoodTags') {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return Array.from(el.querySelectorAll('.mood-tag.selected')).map(b => b.dataset.tag);
+}
+
 function openReviewModal(album) {
   if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
   injectReviewModal();
@@ -513,6 +554,8 @@ function openReviewModal(album) {
   document.getElementById('dspRefUrl').value    = '';
   document.getElementById('charCount').textContent = '0 / 2000';
   document.getElementById('reviewError').style.display = 'none';
+  // Reset mood tags
+  document.querySelectorAll('#reviewMoodTags .mood-tag').forEach(t => t.classList.remove('selected'));
   setReviewMode('star');
 
   buildStars('modalStars', { size: 32, interactive: true, value: 0 });
@@ -566,6 +609,7 @@ async function submitReview() {
       rating,
       reviewText: _reviewMode === 'written' ? document.getElementById('reviewText').value.trim() : '',
       dspUrl:     document.getElementById('dspRefUrl').value.trim() || '',
+      tags:       getSelectedMoodTags('reviewMoodTags'),
     });
 
     closeReviewModal();

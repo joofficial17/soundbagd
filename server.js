@@ -118,12 +118,43 @@ db.exec(`
     UNIQUE(list_id, album_id)
   );
 
-  CREATE INDEX IF NOT EXISTS idx_reviews_album  ON reviews(album_id);
-  CREATE INDEX IF NOT EXISTS idx_reviews_user   ON reviews(user_id);
-  CREATE INDEX IF NOT EXISTS idx_reviews_recent ON reviews(created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_lists_user     ON lists(user_id);
-  CREATE INDEX IF NOT EXISTS idx_list_items     ON list_items(list_id);
+  CREATE TABLE IF NOT EXISTS follows (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(follower_id, following_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS review_likes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    review_id  INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, review_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS review_comments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_id  INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reviews_album    ON reviews(album_id);
+  CREATE INDEX IF NOT EXISTS idx_reviews_user     ON reviews(user_id);
+  CREATE INDEX IF NOT EXISTS idx_reviews_recent   ON reviews(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_lists_user       ON lists(user_id);
+  CREATE INDEX IF NOT EXISTS idx_list_items       ON list_items(list_id);
+  CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+  CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+  CREATE INDEX IF NOT EXISTS idx_review_likes     ON review_likes(review_id);
+  CREATE INDEX IF NOT EXISTS idx_review_comments  ON review_comments(review_id);
 `);
+
+// ── DB Migrations (add columns to existing tables) ────────
+try { db.exec("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT ''"); } catch {}
 
 // ── In-Memory Cache ────────────────────────────────────────
 const cache    = new Map();
@@ -526,7 +557,7 @@ function upsertAlbum({ itunesId, title, artist, artwork, year, genre, mediaType,
 
 // POST /api/reviews
 app.post('/api/reviews', auth, (req, res) => {
-  const { itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl, rating, reviewText, dspUrl } = req.body || {};
+  const { itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl, rating, reviewText, dspUrl, tags } = req.body || {};
 
   if (!title)   return res.status(400).json({ error: 'Album title is required' });
   if (!rating)  return res.status(400).json({ error: 'Rating is required' });
@@ -534,17 +565,20 @@ app.post('/api/reviews', auth, (req, res) => {
   if (isNaN(r) || r < 0.5 || r > 5 || (r * 2) % 1 !== 0)
     return res.status(400).json({ error: 'Rating must be 0.5–5.0 in half-star steps' });
 
+  const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
+
   try {
     const albumId = upsertAlbum({ itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl });
     db.prepare(`
-      INSERT INTO reviews (user_id, album_id, rating, review_text, dsp_url)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO reviews (user_id, album_id, rating, review_text, dsp_url, tags)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, album_id) DO UPDATE SET
         rating      = excluded.rating,
         review_text = excluded.review_text,
         dsp_url     = excluded.dsp_url,
+        tags        = excluded.tags,
         created_at  = CURRENT_TIMESTAMP
-    `).run(req.user.id, albumId, r, reviewText?.trim() || null, dspUrl?.trim() || null);
+    `).run(req.user.id, albumId, r, reviewText?.trim() || null, dspUrl?.trim() || null, tagsStr);
 
     res.json({ success: true });
   } catch (err) {
@@ -563,7 +597,7 @@ app.delete('/api/reviews/:itunesId', auth, (req, res) => {
 
 // PUT /api/reviews/:itunesId
 app.put('/api/reviews/:itunesId', auth, (req, res) => {
-  const { rating, reviewText, dspUrl } = req.body || {};
+  const { rating, reviewText, dspUrl, tags } = req.body || {};
   const r = Number(rating);
   if (!rating || isNaN(r) || r < 0.5 || r > 5 || (r * 2) % 1 !== 0)
     return res.status(400).json({ error: 'Rating must be 0.5–5.0 in half-star steps' });
@@ -571,10 +605,12 @@ app.put('/api/reviews/:itunesId', auth, (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
   if (!album) return res.status(404).json({ error: 'Review not found' });
 
+  const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
+
   const result = db.prepare(`
-    UPDATE reviews SET rating=?, review_text=?, dsp_url=?, created_at=CURRENT_TIMESTAMP
+    UPDATE reviews SET rating=?, review_text=?, dsp_url=?, tags=?, created_at=CURRENT_TIMESTAMP
     WHERE user_id=? AND album_id=?
-  `).run(r, reviewText?.trim() || null, dspUrl?.trim() || null, req.user.id, album.id);
+  `).run(r, reviewText?.trim() || null, dspUrl?.trim() || null, tagsStr, req.user.id, album.id);
 
   if (!result.changes) return res.status(404).json({ error: 'Review not found' });
   res.json({ success: true });
@@ -585,14 +621,30 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
   if (!album) return res.json([]);
 
+  // Determine current user (optional auth)
+  let currentUserId = null;
+  try {
+    const token = (req.headers.authorization || '').split(' ')[1];
+    if (token) { const decoded = require('jsonwebtoken').verify(token, JWT_SECRET); currentUserId = decoded.id; }
+  } catch {}
+
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at,
-           u.username, u.initials, u.avatar_gradient
+    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags,
+           u.username, u.initials, u.avatar_gradient,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
+           (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count
     FROM reviews r JOIN users u ON r.user_id = u.id
     WHERE r.album_id = ?
     ORDER BY r.created_at DESC
     LIMIT 100
   `).all(album.id);
+
+  // Add is_liked per review if user is logged in
+  if (currentUserId) {
+    reviews.forEach(r => {
+      r.is_liked = !!db.prepare('SELECT 1 FROM review_likes WHERE user_id=? AND review_id=?').get(currentUserId, r.id);
+    });
+  }
 
   res.json(reviews);
 });
@@ -601,9 +653,11 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
 app.get('/api/reviews/recent', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 50);
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.created_at,
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
            u.username, u.initials, u.avatar_gradient,
-           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type
+           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
+           (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count
     FROM reviews r
     JOIN users u ON r.user_id = u.id
     JOIN albums a ON r.album_id = a.id
@@ -618,7 +672,7 @@ app.get('/api/reviews/mine/:itunesId', auth, (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
   if (!album) return res.json(null);
   const review = db.prepare(
-    'SELECT rating, review_text, dsp_url FROM reviews WHERE user_id=? AND album_id=?'
+    'SELECT id, rating, review_text, dsp_url, tags FROM reviews WHERE user_id=? AND album_id=?'
   ).get(req.user.id, album.id);
   res.json(review || null);
 });
@@ -636,7 +690,20 @@ app.get('/api/users/:username', (req, res) => {
     'SELECT COUNT(*) as reviews, ROUND(AVG(rating),2) as avg_rating FROM reviews WHERE user_id=?'
   ).get(u.id);
 
-  res.json({ ...u, ...stats });
+  const followerCount  = db.prepare('SELECT COUNT(*) as c FROM follows WHERE following_id=?').get(u.id).c;
+  const followingCount = db.prepare('SELECT COUNT(*) as c FROM follows WHERE follower_id=?').get(u.id).c;
+
+  // Check if requesting user follows this user (optional auth)
+  let isFollowing = false;
+  try {
+    const token = (req.headers.authorization || '').split(' ')[1];
+    if (token) {
+      const decoded = require('jsonwebtoken').verify(token, JWT_SECRET);
+      isFollowing = !!db.prepare('SELECT 1 FROM follows WHERE follower_id=? AND following_id=?').get(decoded.id, u.id);
+    }
+  } catch {}
+
+  res.json({ ...u, ...stats, followerCount, followingCount, isFollowing });
 });
 
 // GET /api/users/:username/reviews
@@ -645,8 +712,9 @@ app.get('/api/users/:username/reviews', (req, res) => {
   if (!u) return res.status(404).json({ error: 'User not found' });
 
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at,
-           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type
+    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags,
+           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count
     FROM reviews r JOIN albums a ON r.album_id = a.id
     WHERE r.user_id = ?
     ORDER BY r.created_at DESC
@@ -815,6 +883,230 @@ app.delete('/api/lists/:id/items/:itunesId', auth, (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
   if (album) db.prepare('DELETE FROM list_items WHERE list_id=? AND album_id=?').run(req.params.id, album.id);
   res.json({ success: true });
+});
+
+// ── FOLLOW ROUTES ───────────────────────────────────────────
+
+// POST /api/users/:username/follow
+app.post('/api/users/:username/follow', auth, (req, res) => {
+  const target = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.id === req.user.id) return res.status(400).json({ error: 'You cannot follow yourself' });
+  try {
+    db.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?,?)').run(req.user.id, target.id);
+    const count = db.prepare('SELECT COUNT(*) as c FROM follows WHERE following_id=?').get(target.id).c;
+    res.json({ success: true, followerCount: count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to follow' });
+  }
+});
+
+// DELETE /api/users/:username/follow
+app.delete('/api/users/:username/follow', auth, (req, res) => {
+  const target = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  db.prepare('DELETE FROM follows WHERE follower_id=? AND following_id=?').run(req.user.id, target.id);
+  const count = db.prepare('SELECT COUNT(*) as c FROM follows WHERE following_id=?').get(target.id).c;
+  res.json({ success: true, followerCount: count });
+});
+
+// ── LIKE ROUTES ────────────────────────────────────────────
+
+// POST /api/reviews/:id/like  (toggle — likes if not liked, unlikes if liked)
+app.post('/api/reviews/:id/like', auth, (req, res) => {
+  const reviewId = Number(req.params.id);
+  const review = db.prepare('SELECT id FROM reviews WHERE id=?').get(reviewId);
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+
+  const existing = db.prepare('SELECT id FROM review_likes WHERE user_id=? AND review_id=?').get(req.user.id, reviewId);
+  if (existing) {
+    db.prepare('DELETE FROM review_likes WHERE user_id=? AND review_id=?').run(req.user.id, reviewId);
+  } else {
+    db.prepare('INSERT INTO review_likes (user_id, review_id) VALUES (?,?)').run(req.user.id, reviewId);
+  }
+  const count = db.prepare('SELECT COUNT(*) as c FROM review_likes WHERE review_id=?').get(reviewId).c;
+  res.json({ liked: !existing, count });
+});
+
+// ── COMMENT ROUTES ─────────────────────────────────────────
+
+// GET /api/reviews/:id/comments
+app.get('/api/reviews/:id/comments', (req, res) => {
+  const comments = db.prepare(`
+    SELECT c.id, c.text, c.created_at,
+           u.username, u.initials, u.avatar_gradient
+    FROM review_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.review_id = ?
+    ORDER BY c.created_at ASC
+    LIMIT 100
+  `).all(req.params.id);
+  res.json(comments);
+});
+
+// POST /api/reviews/:id/comments
+app.post('/api/reviews/:id/comments', auth, (req, res) => {
+  const { text } = req.body || {};
+  if (!text?.trim()) return res.status(400).json({ error: 'Comment text required' });
+  if (text.trim().length > 1000) return res.status(400).json({ error: 'Comment too long (max 1000 characters)' });
+
+  const review = db.prepare('SELECT id FROM reviews WHERE id=?').get(req.params.id);
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+
+  const result = db.prepare('INSERT INTO review_comments (review_id, user_id, text) VALUES (?,?,?)').run(
+    req.params.id, req.user.id, text.trim()
+  );
+
+  const comment = db.prepare(`
+    SELECT c.id, c.text, c.created_at, u.username, u.initials, u.avatar_gradient
+    FROM review_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+
+  res.json(comment);
+});
+
+// DELETE /api/comments/:id
+app.delete('/api/comments/:id', auth, (req, res) => {
+  const result = db.prepare('DELETE FROM review_comments WHERE id=? AND user_id=?').run(req.params.id, req.user.id);
+  if (!result.changes) return res.status(404).json({ error: 'Comment not found or not yours' });
+  res.json({ success: true });
+});
+
+// ── YEAR-END STATS ─────────────────────────────────────────
+
+// GET /api/users/:username/yearstats/:year
+app.get('/api/users/:username/yearstats/:year', (req, res) => {
+  const u = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!u) return res.status(404).json({ error: 'User not found' });
+
+  const year = req.params.year;
+
+  const summary = db.prepare(`
+    SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg_rating,
+           MAX(rating) as max_rating
+    FROM reviews
+    WHERE user_id=? AND strftime('%Y', created_at)=?
+  `).get(u.id, year);
+
+  const topGenre = db.prepare(`
+    SELECT a.genre, COUNT(*) as cnt
+    FROM reviews r JOIN albums a ON r.album_id = a.id
+    WHERE r.user_id=? AND strftime('%Y', r.created_at)=? AND a.genre != ''
+    GROUP BY a.genre ORDER BY cnt DESC LIMIT 1
+  `).get(u.id, year);
+
+  const monthlyActivity = db.prepare(`
+    SELECT strftime('%m', created_at) as month, COUNT(*) as cnt
+    FROM reviews
+    WHERE user_id=? AND strftime('%Y', created_at)=?
+    GROUP BY month ORDER BY month
+  `).all(u.id, year);
+
+  const topRated = db.prepare(`
+    SELECT r.rating, a.title, a.artist, a.artwork_url, a.itunes_id
+    FROM reviews r JOIN albums a ON r.album_id = a.id
+    WHERE r.user_id=? AND strftime('%Y', r.created_at)=?
+    ORDER BY r.rating DESC, r.created_at DESC LIMIT 5
+  `).all(u.id, year);
+
+  const mediaBreakdown = db.prepare(`
+    SELECT a.media_type, COUNT(*) as cnt
+    FROM reviews r JOIN albums a ON r.album_id = a.id
+    WHERE r.user_id=? AND strftime('%Y', r.created_at)=?
+    GROUP BY a.media_type
+  `).all(u.id, year);
+
+  res.json({ year, summary, topGenre, monthlyActivity, topRated, mediaBreakdown });
+});
+
+// ── RECOMMENDATIONS ────────────────────────────────────────
+
+// GET /api/recommendations/:username
+app.get('/api/recommendations/:username', async (req, res) => {
+  const u = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!u) return res.status(404).json({ error: 'User not found' });
+
+  // Get user's high-rated albums
+  const highRated = db.prepare(`
+    SELECT a.title, a.artist, a.genre, a.itunes_id, r.rating
+    FROM reviews r JOIN albums a ON r.album_id = a.id
+    WHERE r.user_id=? AND r.rating >= 3.5
+    ORDER BY r.rating DESC LIMIT 20
+  `).all(u.id);
+
+  // Get all albums the user has already reviewed (to exclude)
+  const reviewed = new Set(
+    db.prepare('SELECT a.itunes_id FROM reviews r JOIN albums a ON r.album_id = a.id WHERE r.user_id=?')
+      .all(u.id).map(r => r.itunes_id)
+  );
+
+  if (!highRated.length) {
+    return res.json({ recommendations: [], message: 'Log more music to get personalized recommendations!' });
+  }
+
+  // Build genre and artist preferences
+  const genreCounts = {};
+  const artistCounts = {};
+  for (const r of highRated) {
+    if (r.genre) genreCounts[r.genre] = (genreCounts[r.genre] || 0) + 1;
+    if (r.artist) artistCounts[r.artist] = (artistCounts[r.artist] || 0) + 1;
+  }
+
+  const topGenres  = Object.entries(genreCounts).sort((a,b) => b[1]-a[1]).slice(0,3).map(e => e[0]);
+  const topArtists = Object.entries(artistCounts).sort((a,b) => b[1]-a[1]).slice(0,3).map(e => e[0]);
+
+  const recommendations = [];
+  const seen = new Set();
+
+  // Recommend by top artists
+  for (const artist of topArtists) {
+    try {
+      const data = await cachedFetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=album&limit=6`,
+        CACHE_1H
+      );
+      const albums = (data.results || []).filter(r => r.collectionType && !reviewed.has(String(r.collectionId)));
+      for (const a of albums.slice(0, 2)) {
+        const id = String(a.collectionId);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const sourceAlbum = highRated.find(h => h.artist.toLowerCase() === artist.toLowerCase());
+        recommendations.push({
+          ...formatAlbum(a),
+          reason: `Because you loved music by ${artist}`,
+          reasonDetail: sourceAlbum ? `You gave "${sourceAlbum.title}" ${sourceAlbum.rating}★` : '',
+          type: 'artist',
+        });
+      }
+    } catch {}
+  }
+
+  // Recommend by top genres
+  const genreIdMap = { 'Country':6,'Hip-Hop':18,'Pop':14,'R&B/Soul':15,'Rock':21,'Jazz':11,'Electronic':7,'Indie':1222,'Folk':1219,'Latin':12,'Classical':5,'Metal':1203,'K-Pop':51 };
+  for (const genre of topGenres) {
+    try {
+      const genreId = genreIdMap[genre];
+      const url = genreId
+        ? `https://itunes.apple.com/search?term=top+${encodeURIComponent(genre)}&entity=album&limit=8&genreId=${genreId}`
+        : `https://itunes.apple.com/search?term=${encodeURIComponent(genre)}+music&entity=album&limit=8`;
+      const data = await cachedFetch(url, CACHE_1H);
+      const albums = (data.results || []).filter(r => r.collectionType && !reviewed.has(String(r.collectionId)));
+      for (const a of albums.slice(0, 2)) {
+        const id = String(a.collectionId);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const sourceAlbum = highRated.find(h => h.genre === genre);
+        recommendations.push({
+          ...formatAlbum(a),
+          reason: `Because you love ${genre} music`,
+          reasonDetail: sourceAlbum ? `Similar to "${sourceAlbum.title}" which you rated ${sourceAlbum.rating}★` : '',
+          type: 'genre',
+        });
+      }
+    } catch {}
+  }
+
+  res.json({ recommendations: recommendations.slice(0, 12), topGenres, topArtists });
 });
 
 // GET /api/stats

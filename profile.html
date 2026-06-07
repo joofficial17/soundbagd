@@ -17,6 +17,7 @@
       <li><a href="index.html">Explore</a></li>
       <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
       <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
+      <li><a href="recommendations.html">For You</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -44,6 +45,7 @@
       <button class="profile-tab" data-tab="tab-top-lists" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Top Lists</button>
       <button class="profile-tab" data-tab="tab-diary" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Diary</button>
       <button class="profile-tab" data-tab="tab-lists" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Lists</button>
+      <button class="profile-tab" data-tab="tab-yearstats" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Year in Review</button>
     </div>
   </div>
 </div>
@@ -119,6 +121,19 @@
         <h2 class="h4" style="margin-bottom:20px">Music Diary</h2>
         <div id="diaryFeed">
           <div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">No diary entries yet.</div>
+        </div>
+      </div>
+
+      <!-- YEAR IN REVIEW TAB -->
+      <div id="tab-yearstats" style="display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+          <h2 class="h4">Year in Review</h2>
+          <select id="yearSelect" style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:6px 12px;font-size:.85rem;outline:none;cursor:pointer" onchange="loadYearStats()">
+            ${Array.from({length:6},(_, i) => 2025 - i).map(y => `<option value="${y}">${y}</option>`).join('')}
+          </select>
+        </div>
+        <div id="yearStatsContent">
+          <div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">Select a year to see your stats.</div>
         </div>
       </div>
 
@@ -313,6 +328,7 @@ async function initPage() {
 function renderProfileHeader(u) {
   const myUser = auth.getUser();
   const isMe   = myUser && myUser.username.toLowerCase() === u.username.toLowerCase();
+  const followed = u.isFollowing;
 
   document.getElementById('profileHeaderInner').innerHTML = `
     <div class="avatar avatar--xl fade-up" style="background:${escHtml(u.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)')}">${escHtml(u.initials || u.username.slice(0,2).toUpperCase())}</div>
@@ -322,22 +338,55 @@ function renderProfileHeader(u) {
       </div>
       <div class="profile-header__handle">@${escHtml(u.username)}</div>
       ${u.bio ? `<div class="profile-header__bio">${escHtml(u.bio)}</div>` : isMe ? `<div class="profile-header__bio muted" style="font-style:italic">No bio yet — <a href="#" onclick="event.preventDefault();editBio()" style="color:var(--gold)">add one</a></div>` : ''}
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         ${isMe
           ? `<button class="btn btn--ghost btn--sm" onclick="editBio()">Edit Bio</button>
              <button class="btn btn--ghost btn--sm" onclick="logoutUser()">Sign Out</button>`
-          : `<button class="btn btn--ghost btn--sm">Follow</button>`
+          : `<button id="followBtn" class="btn btn--${followed ? 'ghost' : 'gold'} btn--sm" onclick="toggleFollow('${escHtml(u.username)}')">
+               ${followed ? 'Following ✓' : '+ Follow'}
+             </button>`
         }
       </div>
     </div>
     <div class="stats-row fade-up fade-up-2" style="margin-left:auto;flex-direction:column;align-items:flex-end;gap:12px">
-      <div style="display:flex;gap:28px">
+      <div style="display:flex;gap:20px">
         <div class="stat"><div class="stat__value">${u.reviews || 0}</div><div class="stat__label">Reviews</div></div>
+        <div class="stat"><div class="stat__value">${u.followerCount || 0}</div><div class="stat__label">Followers</div></div>
+        <div class="stat"><div class="stat__value">${u.followingCount || 0}</div><div class="stat__label">Following</div></div>
         <div class="stat"><div class="stat__value">${u.avg_rating ? Number(u.avg_rating).toFixed(1) : '—'}</div><div class="stat__label">Avg Rating</div></div>
       </div>
       <div class="text-xs muted">Member since ${new Date(u.created_at).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
     </div>
   `;
+}
+
+async function toggleFollow(username) {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  const btn = document.getElementById('followBtn');
+  const isFollowing = btn?.textContent.includes('Following');
+  try {
+    let data;
+    if (isFollowing) {
+      data = await api.delete(`/api/users/${encodeURIComponent(username)}/follow`);
+      if (btn) { btn.textContent = '+ Follow'; btn.className = 'btn btn--gold btn--sm'; }
+    } else {
+      data = await api.post(`/api/users/${encodeURIComponent(username)}/follow`, {});
+      if (btn) { btn.textContent = 'Following ✓'; btn.className = 'btn btn--ghost btn--sm'; }
+    }
+    // Update follower count
+    if (data?.followerCount !== undefined && _profileUser) {
+      _profileUser.followerCount = data.followerCount;
+      const followerStat = document.querySelector('.stat__value');
+      // Re-render stats row
+      document.querySelectorAll('.stats-row .stat').forEach((el, i) => {
+        if (el.querySelector('.stat__label')?.textContent === 'Followers') {
+          el.querySelector('.stat__value').textContent = data.followerCount;
+        }
+      });
+    }
+  } catch (err) {
+    showToast('Could not update follow: ' + err.message);
+  }
 }
 
 async function loadProfileReviews(username) {
@@ -377,17 +426,20 @@ async function loadProfileReviews(username) {
           <div class="text-xs muted" style="flex-shrink:0">${relativeTime(r.created_at)}</div>
         </div>
         ${r.review_text ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
-        ${_isOwnProfile ? `
-        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-          <button class="btn btn--ghost btn--sm" onclick="openEditReviewModal('${escHtml(r.itunes_id)}')">
+        ${(r.tags || '').split(',').filter(Boolean).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${(r.tags||'').split(',').filter(Boolean).map(t => `<span class="mood-tag">#${escHtml(t)}</span>`).join('')}</div>` : ''}
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+          <button class="like-btn" onclick="toggleLike(${r.id},this)">♥ <span class="like-count">${r.like_count||0}</span></button>
+          <a href="album.html?id=${escHtml(r.itunes_id)}#comments" class="btn btn--ghost btn--sm" style="font-size:.75rem">💬 Discuss</a>
+          ${_isOwnProfile ? `
+          <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="openEditReviewModal('${escHtml(r.itunes_id)}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
           </button>
           <button class="btn btn--ghost btn--sm" style="color:var(--coral)" onclick="deleteReview('${escHtml(r.itunes_id)}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
             Delete
-          </button>
-        </div>` : ''}
+          </button>` : ''}
+        </div>
       </div>`).join('');
 
     // Diary tab — same reviews in a different layout
@@ -406,6 +458,88 @@ async function loadProfileReviews(username) {
         </div>
       </div>`).join('');
   } catch { /* server not running */ }
+}
+
+async function loadYearStats() {
+  const yearEl    = document.getElementById('yearSelect');
+  const contentEl = document.getElementById('yearStatsContent');
+  if (!yearEl || !contentEl || !_profileUser) return;
+  const year = yearEl.value;
+  contentEl.innerHTML = '<div style="color:var(--text-muted);padding:20px 0;font-size:.875rem;animation:pulse 1.5s ease infinite">Loading your year in music…</div>';
+  try {
+    const data = await api.get(`/api/users/${encodeURIComponent(_profileUser.username)}/yearstats/${year}`);
+    const s = data.summary || {};
+    if (!s.total) {
+      contentEl.innerHTML = `<div style="color:var(--text-muted);font-size:.9rem;padding:20px 0;text-align:center">
+        <div style="font-size:2rem;margin-bottom:12px">🎵</div>
+        No reviews logged in ${year}. Start adding music!
+      </div>`;
+      return;
+    }
+
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthMap = {};
+    (data.monthlyActivity || []).forEach(m => { monthMap[m.month] = m.cnt; });
+    const maxMonth = Math.max(...Object.values(monthMap), 1);
+
+    contentEl.innerHTML = `
+      <!-- Stats headline -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px;margin-bottom:32px">
+        <div class="card" style="padding:20px;text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:2.5rem;font-weight:700;color:var(--gold)">${s.total}</div>
+          <div class="text-xs muted" style="margin-top:4px">Albums Logged</div>
+        </div>
+        <div class="card" style="padding:20px;text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:2.5rem;font-weight:700;color:var(--gold)">${s.avg_rating ? Number(s.avg_rating).toFixed(1) : '—'}</div>
+          <div class="text-xs muted" style="margin-top:4px">Avg Rating</div>
+        </div>
+        ${data.topGenre ? `<div class="card" style="padding:20px;text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;color:var(--gold)">${escHtml(data.topGenre.genre)}</div>
+          <div class="text-xs muted" style="margin-top:4px">Top Genre</div>
+        </div>` : ''}
+        <div class="card" style="padding:20px;text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:2.5rem;font-weight:700;color:var(--gold)">${s.max_rating || '—'}</div>
+          <div class="text-xs muted" style="margin-top:4px">Best Rating Given</div>
+        </div>
+      </div>
+
+      <!-- Monthly activity chart -->
+      <h3 class="h4" style="margin-bottom:16px">Activity by Month</h3>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:80px;margin-bottom:8px">
+        ${months.map((m, i) => {
+          const monthStr = String(i + 1).padStart(2, '0');
+          const cnt = monthMap[monthStr] || 0;
+          const pct = maxMonth ? Math.round(cnt / maxMonth * 100) : 0;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
+            <div style="flex:1;display:flex;align-items:flex-end;width:100%">
+              <div style="width:100%;background:${pct > 0 ? 'var(--gold)' : 'var(--bg-raised)'};border-radius:3px 3px 0 0;height:${Math.max(pct, pct > 0 ? 8 : 0)}%;transition:height .4s;opacity:${pct > 0 ? '1' : '0.3'}" title="${cnt} review${cnt !== 1 ? 's' : ''}"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${months.map(m => `<div style="flex:1;text-align:center;font-size:.65rem;color:var(--text-dim)">${m}</div>`).join('')}
+      </div>
+
+      <!-- Top rated this year -->
+      ${data.topRated?.length ? `
+      <h3 class="h4" style="margin:28px 0 16px">Top Rated in ${year}</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${data.topRated.map((r, i) => `
+          <div class="top5-item" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">
+            <div class="top5-item__num">${i + 1}</div>
+            <div class="top5-item__art"><img src="${escHtml(r.artwork_url)}" alt="" loading="lazy"></div>
+            <div class="top5-item__info">
+              <div class="top5-item__title">${escHtml(r.title)}</div>
+              <div class="top5-item__sub">${escHtml(r.artist)}</div>
+            </div>
+            <div class="rating-badge">${starsHtml(r.rating, 11)} ${r.rating}</div>
+          </div>`).join('')}
+      </div>` : ''}
+    `;
+  } catch (err) {
+    contentEl.innerHTML = `<div style="color:var(--coral);font-size:.875rem">${escHtml(err.message)}</div>`;
+  }
 }
 
 async function loadTop5(username) {
@@ -478,12 +612,14 @@ document.querySelectorAll('.profile-tab').forEach(btn => {
     });
     btn.style.color = 'var(--gold)';
     btn.style.borderBottomColor = 'var(--gold)';
-    ['tab-reviews','tab-top-lists','tab-diary','tab-lists'].forEach(id => {
+    ['tab-reviews','tab-top-lists','tab-diary','tab-lists','tab-yearstats'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
     const target = document.getElementById(btn.dataset.tab);
     if (target) target.style.display = '';
+    // Auto-load year stats when that tab is clicked
+    if (btn.dataset.tab === 'tab-yearstats') loadYearStats();
   });
 });
 
