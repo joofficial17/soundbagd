@@ -984,6 +984,95 @@ async function runSearch(q, dropdown) {
   }
 }
 
+// ── Song Review Modal ───────────────────────────────────────
+let _songSearchTimeout;
+
+function injectSongReviewModal() {
+  if (document.getElementById('songReviewModal')) return;
+  const el = document.createElement('div');
+  el.id = 'songReviewModal';
+  el.className = 'modal-backdrop';
+  el.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div class="text-xs muted" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:4px">Review a Song</div>
+          <h3 style="font-family:'Playfair Display',serif;font-size:1.3rem">Find a Song</h3>
+        </div>
+        <button class="modal__close" onclick="closeSongReviewModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div style="position:relative;margin-bottom:8px">
+        <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-dim);pointer-events:none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="songSearchInput" type="text" placeholder="Search for a song…" autocomplete="off"
+          style="width:100%;background:var(--bg-raised);border:1px solid var(--border);border-radius:40px;padding:10px 16px 10px 38px;color:var(--text);font-size:.875rem;outline:none;transition:var(--transition)"
+          onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+      </div>
+      <div id="songSearchResults" style="max-height:320px;overflow-y:auto"></div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  el.addEventListener('click', e => { if (e.target === el) closeSongReviewModal(); });
+
+  document.getElementById('songSearchInput').addEventListener('input', e => {
+    clearTimeout(_songSearchTimeout);
+    const q = e.target.value.trim();
+    const results = document.getElementById('songSearchResults');
+    if (!q) { results.innerHTML = ''; return; }
+    results.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:.875rem">Searching…</div>';
+    _songSearchTimeout = setTimeout(async () => {
+      try {
+        const tracks = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=track&limit=10`);
+        if (!tracks.length) { results.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:.875rem">No songs found.</div>'; return; }
+        results.innerHTML = tracks.map(t => `
+          <div onclick='selectSongToReview(${JSON.stringify(t).replace(/'/g,"&#39;")})'
+            style="display:flex;align-items:center;gap:12px;padding:10px 4px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
+            onmouseenter="this.style.background='var(--bg-raised)'" onmouseleave="this.style.background=''">
+            <img src="${escHtml(t.artwork)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)" alt="">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.title)}</div>
+              <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(t.artist)} · ${escHtml(t.album || '')}${t.year ? ' · ' + t.year : ''}</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5" style="flex-shrink:0"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>`).join('');
+      } catch {
+        results.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:.875rem">Search failed — is the server running?</div>';
+      }
+    }, 300);
+  });
+}
+
+function openSongReviewModal() {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  injectSongReviewModal();
+  document.getElementById('songSearchInput').value = '';
+  document.getElementById('songSearchResults').innerHTML = '';
+  document.getElementById('songReviewModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('songSearchInput').focus(), 50);
+}
+
+function closeSongReviewModal() {
+  document.getElementById('songReviewModal')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function selectSongToReview(track) {
+  closeSongReviewModal();
+  // Convert track to album-style object for the review modal
+  openReviewModal({
+    itunesId:  track.itunesId,
+    title:     track.title,
+    artist:    track.artist,
+    artwork:   track.artwork,
+    year:      track.year,
+    genre:     track.genre || '',
+    mediaType: 'Song',
+    itunesUrl: track.itunesUrl || '',
+  });
+}
+
 // ── Nav injection ───────────────────────────────────────────
 function injectNav() {
   const nav = document.querySelector('.nav__actions');

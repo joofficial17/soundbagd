@@ -287,16 +287,17 @@ app.get('/api/music/trending', async (req, res) => {
   }
 });
 
-// GET /api/music/search?q=…&type=album|track|artist&limit=20
+// GET /api/music/search?q=…&type=album|track|artist&limit=20&genreId=12
 app.get('/api/music/search', async (req, res) => {
-  const { q, type = 'album', limit = 20 } = req.query;
+  const { q, type = 'album', limit = 20, genreId } = req.query;
   if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
 
   const entityMap = { album: 'album', track: 'song', artist: 'musicArtist' };
   const entity = entityMap[type] || 'album';
 
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=${entity}&limit=${Math.min(Number(limit), 50)}`;
+    let url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=${entity}&limit=${Math.min(Number(limit), 50)}`;
+    if (genreId) url += `&genreId=${encodeURIComponent(genreId)}`;
     const data = await cachedFetch(url, CACHE_5M);
 
     const results = (data.results || []).map(item => {
