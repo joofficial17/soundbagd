@@ -330,9 +330,29 @@ app.get('/api/music/search', async (req, res) => {
 
 // GET /api/music/album/:id  — full album with tracks + our review stats
 app.get('/api/music/album/:id', async (req, res) => {
+  const id = req.params.id;
+
+  // For DSP/custom albums not in iTunes, return data from our own DB
+  if (!id.match(/^\d+$/)) {
+    const dbAlbum = db.prepare('SELECT * FROM albums WHERE itunes_id=?').get(id);
+    if (dbAlbum) {
+      const stats = db.prepare(`
+        SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg
+        FROM reviews WHERE album_id=?
+      `).get(dbAlbum.id);
+      return res.json({
+        itunesId: dbAlbum.itunes_id, title: dbAlbum.title, artist: dbAlbum.artist,
+        artwork: dbAlbum.artwork_url, year: dbAlbum.year, genre: dbAlbum.genre,
+        mediaType: dbAlbum.media_type, trackCount: dbAlbum.track_count,
+        itunesUrl: dbAlbum.itunes_url, tracks: [], stats,
+      });
+    }
+    return res.status(404).json({ error: 'Album not found' });
+  }
+
   try {
     const data = await cachedFetch(
-      `https://itunes.apple.com/lookup?id=${encodeURIComponent(req.params.id)}&entity=song`,
+      `https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&entity=song`,
       CACHE_1H
     );
     const results = data.results || [];
