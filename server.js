@@ -428,12 +428,20 @@ app.get('/api/auth/me', auth, (req, res) => {
 });
 
 // ── MUSIC ROUTES ────────────────────────────────────────────
-// Charts/browse: Apple Music RSS + iTunes (reliable, no auth)
-// Search + album detail: Spotify (rich metadata, links)
+// Charts: multi-source aggregation (Apple + Deezer + Last.fm)
+// Search + album detail: Spotify
 
 const CACHE_6H = 6 * 60 * 60 * 1000;
 
-// ── iTunes / Apple helpers (for charts & genre browse) ──────
+// ── Last.fm ──────────────────────────────────────────────────
+const LASTFM_KEY = process.env.LASTFM_API_KEY || null;
+async function lastfmFetch(params, ttl = CACHE_1H) {
+  if (!LASTFM_KEY) return null;
+  const url = 'https://ws.audioscrobbler.com/2.0/?' + new URLSearchParams({ ...params, api_key: LASTFM_KEY, format: 'json' });
+  try { return await cachedFetch(url, ttl); } catch { return null; }
+}
+
+// ── iTunes / Apple helpers ───────────────────────────────────
 function artworkHQ(url, size = 600) {
   if (!url) return '';
   return url.replace(/\d+x\d+bb/, `${size}x${size}bb`).replace(/\d+x\d+/, `${size}x${size}`);
@@ -452,117 +460,196 @@ function formatAppleAlbum(item) {
   };
 }
 
-// ── Deezer helpers (free public API, no auth needed) ─────────
+// ── Deezer helpers ───────────────────────────────────────────
 const DEEZER_GENRE_IDS = {
-  'Hip-Hop':    116,
-  'Pop':        132,
-  'R&B':        165,
-  'Rock':       152,
-  'Country':    84,
-  'Electronic': 106,
-  'Latin':      197,
-  'Indie':      85,
-  'Jazz':       129,
-  'Classical':  98,
-  'Metal':      464,
-  'K-Pop':      113, // Dance/K-Pop closest match
-  'Folk':       466,
+  'Hip-Hop': 116, 'Pop': 132, 'R&B': 165, 'Rock': 152,
+  'Country': 84, 'Electronic': 106, 'Latin': 197, 'Indie': 85,
+  'Jazz': 129, 'Classical': 98, 'Metal': 464, 'K-Pop': 113, 'Folk': 466,
+};
+const LASTFM_GENRE_TAGS = {
+  'Hip-Hop': 'hip-hop', 'Pop': 'pop', 'R&B': 'rnb', 'Rock': 'rock',
+  'Country': 'country', 'Electronic': 'electronic', 'Latin': 'latin',
+  'Indie': 'indie', 'Jazz': 'jazz', 'Classical': 'classical',
+  'Metal': 'metal', 'K-Pop': 'k-pop', 'Folk': 'folk',
 };
 
 function formatDeezerTrack(t) {
-  // Extract unique album from a Deezer track object
   return {
     itunesId:  String(t.album?.id || t.id),
     title:     t.album?.title || t.title,
     artist:    t.artist?.name || '',
     artwork:   t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '',
-    year:      null, // not in chart response; skip
+    year:      null,
     genre:     '',
     mediaType: 'Album',
     itunesUrl: t.album?.link || t.link || '',
-    rank:      t.rank || 0,
   };
 }
-
 async function deezerFetch(path, ttl = CACHE_1H) {
   return cachedFetch('https://api.deezer.com' + path, ttl);
 }
 
-// GET /api/music/trending — Deezer global top 50 tracks → unique albums
+// ── Chart aggregation core ───────────────────────────────────
+// Normalise "Artist — Title" into a stable key for cross-source matching
+function chartKey(artist, title) {
+  const clean = s => s.toLowerCase()
+    .replace(/\(.*?\)/g, '')          // remove parentheticals
+    .replace(/[^a-z0-9 ]/g, '')       // strip punctuation
+    .replace(/\s+/g, ' ').trim();
+  return `${clean(artist)}||${clean(title)}`;
+}
+
+// Score-based merge: position 1 in a 50-item list = 50 pts, position 50 = 1 pt
+function buildScoreMap() {
+  const map = new Map(); // key → { album, score, sources[] }
+  return {
+    add(album, position, total, source) {
+      const key = chartKey(album.artist, album.title);
+      if (!key.includes('||')) return;
+      const pts = Math.max(0, total - position);
+      if (map.has(key)) {
+        const e = map.get(key);
+        e.score += pts;
+        if (!e.sources.includes(source)) e.sources.push(source);
+        // Prefer higher-res artwork
+        if (!e.album.artwork && album.artwork) e.album.artwork = album.artwork;
+      } else {
+        map.set(key, { album: { ...album }, score: pts, sources: [source] });
+      }
+    },
+    sorted(limit = 50) {
+      return [...map.values()]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map(e => ({ ...e.album, sources: e.sources }));
+    },
+  };
+}
+
+// GET /api/music/trending — Apple + Deezer + Last.fm aggregated
 app.get('/api/music/trending', async (req, res) => {
-  try {
-    const data = await deezerFetch('/chart/0/tracks?limit=50');
-    const seen = new Set();
-    const albums = [];
-    for (const t of (data.data || [])) {
-      const aid = t.album?.id;
-      if (!aid || seen.has(aid)) continue;
-      seen.add(aid);
-      albums.push(formatDeezerTrack(t));
-    }
-    res.json(albums);
-  } catch (err) {
-    console.error('Trending error:', err.message);
-    // Apple RSS fallback
-    try {
-      const data = await cachedFetch(
-        'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
-        CACHE_1H
-      );
-      res.json((data.feed?.results || []).map(item => ({
-        itunesId: String(item.id), title: item.name, artist: item.artistName,
-        artwork: artworkHQ(item.artworkUrl100), year: null, genre: '',
-        mediaType: 'Album', itunesUrl: item.url || '',
-      })));
-    } catch { res.status(500).json({ error: 'Could not load trending' }); }
-  }
+  const scores = buildScoreMap();
+
+  await Promise.allSettled([
+
+    // ── Source 1: Apple Music Top 50 ──
+    cachedFetch('https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json', CACHE_1H)
+      .then(data => {
+        (data.feed?.results || []).forEach((item, i) => scores.add({
+          itunesId:  String(item.id),
+          title:     item.name,
+          artist:    item.artistName,
+          artwork:   artworkHQ(item.artworkUrl100),
+          year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
+          genre:     item.genres?.[0]?.name || '',
+          mediaType: 'Album',
+          itunesUrl: item.url || '',
+        }, i, 50, 'Apple Music'));
+      }).catch(e => console.error('Apple trending error:', e.message)),
+
+    // ── Source 2: Deezer Global Top 50 ──
+    deezerFetch('/chart/0/tracks?limit=50', CACHE_1H)
+      .then(data => {
+        const seen = new Set();
+        let pos = 0;
+        for (const t of (data.data || [])) {
+          if (!t.album?.id || seen.has(t.album.id)) continue;
+          seen.add(t.album.id);
+          scores.add(formatDeezerTrack(t), pos++, 50, 'Deezer');
+        }
+      }).catch(e => console.error('Deezer trending error:', e.message)),
+
+    // ── Source 3: Last.fm Top Tracks → albums (if key configured) ──
+    lastfmFetch({ method: 'chart.getTopTracks', limit: 50 }, CACHE_1H)
+      .then(data => {
+        if (!data) return;
+        (data.tracks?.track || []).forEach((t, i) => {
+          if (!t.name || !t.artist?.name) return;
+          scores.add({
+            itunesId:  `lastfm-${t.mbid || i}`,
+            title:     t.album?.title || t.name,
+            artist:    t.artist.name,
+            artwork:   t.image?.find(img => img.size === 'extralarge')?.['#text'] || '',
+            year:      null,
+            genre:     '',
+            mediaType: 'Album',
+            itunesUrl: t.url || '',
+          }, i, 50, 'Last.fm');
+        });
+      }).catch(e => console.error('Last.fm trending error:', e.message)),
+
+  ]);
+
+  const results = scores.sorted(50);
+  if (!results.length) return res.status(500).json({ error: 'Could not load trending' });
+  res.json(results);
 });
 
 // GET /api/music/genre-chart?genre=Hip-Hop&limit=25
-// Deezer genre-specific chart → unique albums, iTunes fallback
+// Deezer genre chart + Last.fm tag albums + iTunes genreTerm, merged & scored
 app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
   const lim = Math.min(Number(limit), 50);
+  const scores = buildScoreMap();
 
-  const genreId = DEEZER_GENRE_IDS[genre];
-  if (genreId) {
-    try {
+  await Promise.allSettled([
+
+    // ── Deezer genre chart ──
+    (async () => {
+      const genreId = DEEZER_GENRE_IDS[genre];
+      if (!genreId) return;
       const data = await deezerFetch(`/chart/${genreId}/tracks?limit=50`);
-      const seen = new Set();
-      const albums = [];
+      const seen = new Set(); let pos = 0;
       for (const t of (data.data || [])) {
-        const aid = t.album?.id;
-        if (!aid || seen.has(aid)) continue;
-        seen.add(aid);
-        albums.push(formatDeezerTrack(t));
-        if (albums.length >= lim) break;
+        if (!t.album?.id || seen.has(t.album.id)) continue;
+        seen.add(t.album.id);
+        scores.add(formatDeezerTrack(t), pos++, 50, 'Deezer');
       }
-      if (albums.length) return res.json(albums);
-    } catch (err) {
-      console.error(`Deezer genre chart (${genre}) error:`, err.message);
-    }
-  }
+    })().catch(e => console.error('Deezer genre error:', e.message)),
 
-  // ── iTunes genreTerm fallback ──
-  const genreTermMap = {
-    'Country':    'Country',    'Hip-Hop':    'Hip-Hop/Rap',
-    'Pop':        'Pop',        'R&B':        'R&B/Soul',
-    'Rock':       'Rock',       'Jazz':       'Jazz',
-    'Electronic': 'Electronic', 'Indie':      'Alternative',
-    'Folk':       'Folk',       'Latin':      'Latino',
-    'Classical':  'Classical',  'Metal':      'Metal',
-    'K-Pop':      'K-Pop',
-  };
-  const term = genreTermMap[genre] || genre;
-  try {
-    const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${lim}&country=us`;
-    const data = await cachedFetch(url, CACHE_1H);
-    res.json((data.results || []).filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection').map(formatAppleAlbum));
-  } catch (err) {
-    console.error('Genre chart error:', err.message);
-    res.status(500).json({ error: 'Could not load genre chart' });
-  }
+    // ── Last.fm tag top albums ──
+    (async () => {
+      const tag = LASTFM_GENRE_TAGS[genre];
+      if (!tag) return;
+      const data = await lastfmFetch({ method: 'tag.getTopAlbums', tag, limit: 50 });
+      if (!data) return;
+      (data.albums?.album || []).forEach((a, i) => {
+        if (!a.name || !a.artist?.name) return;
+        scores.add({
+          itunesId:  `lastfm-${a.mbid || i}`,
+          title:     a.name,
+          artist:    a.artist.name,
+          artwork:   a.image?.find(img => img.size === 'extralarge')?.['#text'] || '',
+          year:      null,
+          genre,
+          mediaType: 'Album',
+          itunesUrl: a.url || '',
+        }, i, 50, 'Last.fm');
+      });
+    })().catch(e => console.error('Last.fm genre error:', e.message)),
+
+    // ── iTunes genreTerm ──
+    (async () => {
+      const genreTermMap = {
+        'Country': 'Country', 'Hip-Hop': 'Hip-Hop/Rap', 'Pop': 'Pop',
+        'R&B': 'R&B/Soul', 'Rock': 'Rock', 'Jazz': 'Jazz',
+        'Electronic': 'Electronic', 'Indie': 'Alternative', 'Folk': 'Folk',
+        'Latin': 'Latino', 'Classical': 'Classical', 'Metal': 'Metal', 'K-Pop': 'K-Pop',
+      };
+      const term = genreTermMap[genre] || genre;
+      const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=50&country=us`;
+      const data = await cachedFetch(url, CACHE_1H);
+      (data.results || [])
+        .filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection')
+        .forEach((r, i) => scores.add(formatAppleAlbum(r), i, 50, 'Apple Music'));
+    })().catch(e => console.error('iTunes genre error:', e.message)),
+
+  ]);
+
+  const results = scores.sorted(lim);
+  if (!results.length) return res.status(500).json({ error: 'Could not load genre chart' });
+  res.json(results);
 });
 
 // GET /api/music/new-releases?limit=50 — Apple iTunes (date-sorted)
