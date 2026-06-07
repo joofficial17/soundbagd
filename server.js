@@ -251,10 +251,12 @@ const SP_PLAYLISTS = {
 
 const SETUP_SECRET = process.env.SPOTIFY_SETUP_SECRET || 'soundbagd-setup-2026';
 
+const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://soundbagd.up.railway.app/spotify-callback';
+
 // Step 1 — redirect owner to Spotify login
 app.get('/spotify-setup', (req, res) => {
   if (req.query.secret !== SETUP_SECRET) return res.status(403).send('Forbidden');
-  const redirect = `${req.protocol}://${req.headers.host}/spotify-callback`;
+  const redirect = SPOTIFY_REDIRECT_URI;
   const scope    = 'playlist-read-public playlist-read-collaborative';
   const url = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
     client_id:     SPOTIFY_CLIENT_ID,
@@ -270,7 +272,7 @@ app.get('/spotify-setup', (req, res) => {
 app.get('/spotify-callback', async (req, res) => {
   const { code, error } = req.query;
   if (error || !code) return res.status(400).send(`Spotify auth error: ${error}`);
-  const redirect = `${req.protocol}://${req.headers.host}/spotify-callback`;
+  const redirect = SPOTIFY_REDIRECT_URI;
   try {
     const resp = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
