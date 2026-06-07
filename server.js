@@ -257,12 +257,11 @@ const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://soundb
 app.get('/spotify-setup', (req, res) => {
   if (req.query.secret !== SETUP_SECRET) return res.status(403).send('Forbidden');
   const redirect = SPOTIFY_REDIRECT_URI;
-  const scope    = 'playlist-read-public playlist-read-collaborative';
   const url = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
     client_id:     SPOTIFY_CLIENT_ID,
     response_type: 'code',
     redirect_uri:  redirect,
-    scope,
+    scope:         'user-read-private',
     show_dialog:   'true',
   });
   res.redirect(url);
