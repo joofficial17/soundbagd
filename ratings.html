@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ratings · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="ratings.html" class="active">Ratings</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"></div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section style="background:var(--bg-card);border-bottom:1px solid var(--border);padding:48px 0 32px">
+  <div class="container">
+    <div class="hero__eyebrow">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Community Ratings
+    </div>
+    <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.4rem);margin-bottom:8px">
+      What people are <em>loving</em> — and <em>leaving.</em>
+    </h1>
+    <p class="hero__sub" style="font-size:.9rem;max-width:520px">
+      The most acclaimed and most criticized music right now, based on real reviews from Soundbagd members.
+    </p>
+
+    <!-- Type filter -->
+    <div style="display:flex;gap:8px;margin-top:24px;flex-wrap:wrap" id="typeFilter">
+      <button class="tag tag--gold" onclick="setType('all', this)">All</button>
+      <button class="tag" onclick="setType('album', this)">Albums</button>
+      <button class="tag" onclick="setType('track', this)">Songs</button>
+      <button class="tag" onclick="setType('ep', this)">EPs</button>
+    </div>
+  </div>
+</section>
+
+<!-- Content -->
+<div class="container" style="padding-top:40px;padding-bottom:80px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px" id="ratingsGrid">
+
+    <!-- Acclaimed -->
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--gold)">
+        <span style="font-size:1.4rem">🏆</span>
+        <div>
+          <h2 class="h4" style="margin:0">Critically Acclaimed</h2>
+          <div class="text-xs muted">Rated 4 stars or higher</div>
+        </div>
+      </div>
+      <div id="acclaimedList"></div>
+    </div>
+
+    <!-- Panned -->
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--coral, #e05c5c)">
+        <span style="font-size:1.4rem">💔</span>
+        <div>
+          <h2 class="h4" style="margin:0">Critically Panned</h2>
+          <div class="text-xs muted">Rated 2 stars or lower</div>
+        </div>
+      </div>
+      <div id="pannedList"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let _activeType = 'all';
+
+async function initPage() {
+  loadRatings();
+}
+
+function setType(type, btn) {
+  _activeType = type;
+  document.querySelectorAll('#typeFilter button').forEach(b => {
+    b.classList.remove('tag--gold'); b.classList.add('tag');
+  });
+  btn.classList.remove('tag'); btn.classList.add('tag--gold');
+  loadRatings();
+}
+
+async function loadRatings() {
+  renderSkeleton('acclaimedList');
+  renderSkeleton('pannedList');
+
+  const [acclaimed, panned] = await Promise.allSettled([
+    api.get(`/api/reviews/acclaimed?type=${_activeType}&limit=20`),
+    api.get(`/api/reviews/panned?type=${_activeType}&limit=20`),
+  ]);
+
+  renderRatingList('acclaimedList', acclaimed.status === 'fulfilled' ? acclaimed.value : [], 'high');
+  renderRatingList('pannedList',    panned.status === 'fulfilled'    ? panned.value    : [], 'low');
+}
+
+function renderSkeleton(id) {
+  document.getElementById(id).innerHTML = Array.from({length: 5}, () => `
+    <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="width:52px;height:52px;border-radius:var(--radius-sm);background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="height:13px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderRatingList(id, reviews, tone) {
+  const el = document.getElementById(id);
+  if (!reviews.length) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+        <div style="font-size:2rem;margin-bottom:10px">${tone === 'high' ? '🎵' : '🎸'}</div>
+        <div style="font-size:.875rem">No ${tone === 'high' ? 'highly' : 'low'}-rated reviews yet.<br>Be the first to review something!</div>
+        <a href="index.html" class="btn btn--gold btn--sm" style="margin-top:14px;display:inline-flex">Browse Music</a>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = reviews.map(r => {
+    const stars  = starsHtml(r.rating, 13);
+    const date   = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const typeTag = r.media_type && r.media_type.toLowerCase() !== 'album'
+      ? `<span class="tag" style="font-size:.6rem;padding:2px 6px;vertical-align:middle">${escHtml(r.media_type)}</span>` : '';
+
+    return `
+      <div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:var(--transition)"
+        onclick="location.href='album.html?id=${escHtml(r.itunes_id)}&title=${encodeURIComponent(r.title)}&artist=${encodeURIComponent(r.artist)}'"
+        onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+
+        <!-- Artwork -->
+        <img src="${escHtml(r.artwork_url)}" alt=""
+          style="width:52px;height:52px;border-radius:var(--radius-sm);object-fit:cover;flex-shrink:0"
+          onerror="this.style.display='none'">
+
+        <!-- Info -->
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${escHtml(r.title)} ${typeTag}
+          </div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:4px">${escHtml(r.artist)}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="display:flex;gap:2px">${stars}</span>
+            <span style="font-size:.75rem;color:var(--text-muted)">
+              by <a href="profile.html?u=${encodeURIComponent(r.username)}" onclick="event.stopPropagation()"
+                style="color:var(--gold);text-decoration:none">@${escHtml(r.username)}</a>
+              · ${date}
+            </span>
+          </div>
+          ${r.review_text ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4">${escHtml(r.review_text)}</div>` : ''}
+        </div>
+
+      </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Community · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="community.html" class="active">Community</a></li>
+      <li><a href="ratings.html">Ratings</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"></div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section style="background:var(--bg-card);border-bottom:1px solid var(--border);padding:48px 0 36px">
+  <div class="container">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <div class="hero__eyebrow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Reviewers
+        </div>
+        <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.4rem);margin-bottom:8px">
+          Find <em>your people.</em>
+        </h1>
+        <p class="hero__sub" style="font-size:.9rem;max-width:480px">
+          Search for reviewers by username, discover new voices, and follow the people whose taste matches yours.
+        </p>
+      </div>
+      <div id="communityStats" style="display:flex;gap:32px;text-align:center">
+        <div>
+          <div style="font-size:1.8rem;font-weight:800;color:var(--gold)" id="statMembers">—</div>
+          <div class="text-xs muted" style="letter-spacing:.06em;text-transform:uppercase">Members</div>
+        </div>
+        <div>
+          <div style="font-size:1.8rem;font-weight:800;color:var(--gold)" id="statReviews">—</div>
+          <div class="text-xs muted" style="letter-spacing:.06em;text-transform:uppercase">Reviews</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search bar -->
+    <div style="margin-top:28px;max-width:520px;position:relative">
+      <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"
+        width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+      </svg>
+      <input id="userSearchInput" type="text" placeholder="Search by username…" autocomplete="off"
+        style="width:100%;box-sizing:border-box;padding:12px 16px 12px 42px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);font-size:.95rem;outline:none;transition:var(--transition)"
+        oninput="onSearchInput(this.value)"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+    </div>
+  </div>
+</section>
+
+<!-- User grid -->
+<div class="container" style="padding-top:40px;padding-bottom:80px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h2 class="h4" id="resultsLabel">All Members</h2>
+    <span class="text-xs muted" id="resultsCount"></span>
+  </div>
+
+  <div id="userGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    <!-- populated by JS -->
+  </div>
+
+  <div id="emptyState" style="display:none;text-align:center;padding:60px 0">
+    <div style="font-size:3rem;margin-bottom:16px">🔍</div>
+    <h2 class="h4" style="margin-bottom:8px">No members found</h2>
+    <p class="muted">Try a different username.</p>
+  </div>
+
+  <div id="loadingState" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    ${Array.from({length: 8}, () => `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div>
+            <div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div>
+          </div>
+        </div>
+        <div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div>
+      </div>`).join('')}
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let _searchTimeout = null;
+let _currentUser   = null;
+
+async function initPage() {
+  _currentUser = auth.getUser();
+
+  // Load site stats
+  try {
+    const stats = await api.get('/api/stats');
+    document.getElementById('statMembers').textContent = stats.members.toLocaleString();
+    document.getElementById('statReviews').textContent = stats.reviews.toLocaleString();
+  } catch {}
+
+  loadUsers('');
+}
+
+function onSearchInput(val) {
+  clearTimeout(_searchTimeout);
+  _searchTimeout = setTimeout(() => loadUsers(val.trim()), 300);
+}
+
+async function loadUsers(q) {
+  document.getElementById('userGrid').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'grid';
+  document.getElementById('resultsLabel').textContent = q ? `Results for "${q}"` : 'All Members';
+  document.getElementById('resultsCount').textContent = '';
+
+  try {
+    const params = new URLSearchParams({ q, limit: 50 });
+    if (_currentUser) params.set('viewer', _currentUser.id);
+    const users = await api.get('/api/users/search?' + params.toString());
+
+    document.getElementById('loadingState').style.display = 'none';
+
+    if (!users.length) {
+      document.getElementById('emptyState').style.display = '';
+      return;
+    }
+
+    document.getElementById('resultsCount').textContent = `${users.length} member${users.length !== 1 ? 's' : ''}`;
+    document.getElementById('userGrid').innerHTML = users.map(u => userCardHtml(u)).join('');
+  } catch {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('userGrid').innerHTML =
+      '<div style="color:var(--text-muted);font-size:.875rem">Could not load members.</div>';
+  }
+}
+
+function userCardHtml(u) {
+  const isMe = _currentUser && _currentUser.username === u.username;
+  const joinDate = new Date(u.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;display:flex;flex-direction:column;gap:14px;transition:var(--transition)"
+      onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.href='profile.html?u=${encodeURIComponent(u.username)}'">
+        <div style="width:48px;height:48px;border-radius:50%;background:${u.avatar_gradient || 'var(--bg-raised)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#fff;flex-shrink:0">
+          ${escHtml(u.initials || u.username.slice(0,2).toUpperCase())}
+        </div>
+        <div style="min-width:0">
+          <div style="font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@${escHtml(u.username)}</div>
+          <div class="text-xs muted">Joined ${joinDate}</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:flex;gap:20px">
+        <div style="text-align:center">
+          <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${u.review_count || 0}</div>
+          <div class="text-xs muted">Reviews</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${u.follower_count || 0}</div>
+          <div class="text-xs muted">Followers</div>
+        </div>
+        ${u.bio ? `<div style="font-size:.8rem;color:var(--text-muted);font-style:italic;align-self:center;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${escHtml(u.bio)}"</div>` : ''}
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--ghost btn--sm" style="flex:1" onclick="location.href='profile.html?u=${encodeURIComponent(u.username)}'">
+          View Profile
+        </button>
+        ${!isMe && _currentUser ? `
+          <button class="btn btn--sm ${u.isFollowing ? 'btn--gold' : 'btn--ghost'}"
+            id="follow-btn-${u.id}"
+            onclick="toggleFollowCard(${u.id}, '${escHtml(u.username)}', this)"
+            style="flex:1">
+            ${u.isFollowing ? '✓ Following' : '+ Follow'}
+          </button>` : ''}
+        ${!_currentUser ? `
+          <button class="btn btn--ghost btn--sm" style="flex:1" onclick="openAuthModal('login')">
+            Follow
+          </button>` : ''}
+      </div>
+    </div>`;
+}
+
+async function toggleFollowCard(userId, username, btn) {
+  if (!_currentUser) { openAuthModal('login'); return; }
+  const isFollowing = btn.classList.contains('btn--gold');
+  try {
+    if (isFollowing) {
+      await api.delete(`/api/users/${encodeURIComponent(username)}/follow`);
+      btn.classList.remove('btn--gold'); btn.classList.add('btn--ghost');
+      btn.textContent = '+ Follow';
+    } else {
+      await api.post(`/api/users/${encodeURIComponent(username)}/follow`, {});
+      btn.classList.remove('btn--ghost'); btn.classList.add('btn--gold');
+      btn.textContent = '✓ Following';
+    }
+  } catch (err) {
+    alert(err.message || 'Could not update follow status');
+  }
+}
+</script>
+</body>
+</html>

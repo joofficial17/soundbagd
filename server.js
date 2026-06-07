@@ -1151,6 +1151,85 @@ app.get('/api/reviews/recent', (req, res) => {
   res.json(reviews);
 });
 
+// GET /api/reviews/acclaimed?type=album|track|ep&limit=20
+// Recently highly-rated reviews (rating >= 4)
+app.get('/api/reviews/acclaimed', (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  const type  = req.query.type || 'all'; // album | track | ep | all
+  const typeFilter = type === 'all' ? '' :
+    type === 'ep'    ? "AND LOWER(a.media_type) LIKE '%ep%'" :
+    type === 'track' ? "AND LOWER(a.media_type) IN ('track','song','single')" :
+                       "AND LOWER(a.media_type) = 'album'";
+
+  const reviews = db.prepare(`
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
+           u.username, u.initials, u.avatar_gradient,
+           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
+           (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count
+    FROM reviews r
+    JOIN users u ON r.user_id = u.id
+    JOIN albums a ON r.album_id = a.id
+    WHERE r.rating >= 4 ${typeFilter}
+    ORDER BY r.created_at DESC
+    LIMIT ?
+  `).all(limit);
+  res.json(reviews);
+});
+
+// GET /api/reviews/panned?type=album|track|ep&limit=20
+// Recently low-rated reviews (rating <= 2)
+app.get('/api/reviews/panned', (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  const type  = req.query.type || 'all';
+  const typeFilter = type === 'all' ? '' :
+    type === 'ep'    ? "AND LOWER(a.media_type) LIKE '%ep%'" :
+    type === 'track' ? "AND LOWER(a.media_type) IN ('track','song','single')" :
+                       "AND LOWER(a.media_type) = 'album'";
+
+  const reviews = db.prepare(`
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
+           u.username, u.initials, u.avatar_gradient,
+           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
+           (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count
+    FROM reviews r
+    JOIN users u ON r.user_id = u.id
+    JOIN albums a ON r.album_id = a.id
+    WHERE r.rating <= 2 ${typeFilter}
+    ORDER BY r.created_at DESC
+    LIMIT ?
+  `).all(limit);
+  res.json(reviews);
+});
+
+// GET /api/users/search?q=username&limit=20
+app.get('/api/users/search', (req, res) => {
+  const q     = (req.query.q || '').trim().toLowerCase();
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  const viewerId = req.query.viewer ? Number(req.query.viewer) : null;
+
+  const users = db.prepare(`
+    SELECT u.id, u.username, u.bio, u.initials, u.avatar_gradient, u.created_at,
+           (SELECT COUNT(*) FROM reviews r WHERE r.user_id = u.id) AS review_count,
+           (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) AS follower_count
+    FROM users u
+    WHERE u.username LIKE ?
+    ORDER BY review_count DESC, u.created_at ASC
+    LIMIT ?
+  `).all(`%${q}%`, limit);
+
+  // Add isFollowing flag if viewer is logged in
+  if (viewerId) {
+    const followSet = new Set(
+      db.prepare('SELECT following_id FROM follows WHERE follower_id=?').all(viewerId).map(r => r.following_id)
+    );
+    users.forEach(u => { u.isFollowing = followSet.has(u.id); });
+  }
+
+  res.json(users);
+});
+
 // GET /api/reviews/mine/:itunesId  — did the current user review this?
 app.get('/api/reviews/mine/:itunesId', auth, (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
