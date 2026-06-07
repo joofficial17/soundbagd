@@ -779,33 +779,39 @@ app.get('/api/music/search', async (req, res) => {
   }
 });
 
-// GET /api/music/album/:id  — full Spotify album with tracks + our review stats
-app.get('/api/music/album/:id', async (req, res) => {
-  const id = req.params.id;
+// Attach DB review stats to an album object
+function attachStats(album, id) {
+  const dbRow = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(id);
+  if (dbRow) {
+    album.stats = db.prepare(`
+      SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg,
+             SUM(CASE WHEN rating=5    THEN 1 ELSE 0 END) as r5,
+             SUM(CASE WHEN rating=4.5  THEN 1 ELSE 0 END) as r4h,
+             SUM(CASE WHEN rating=4    THEN 1 ELSE 0 END) as r4,
+             SUM(CASE WHEN rating=3.5  THEN 1 ELSE 0 END) as r3h,
+             SUM(CASE WHEN rating=3    THEN 1 ELSE 0 END) as r3,
+             SUM(CASE WHEN rating<=2.5 THEN 1 ELSE 0 END) as rLow
+      FROM reviews WHERE album_id=?
+    `).get(dbRow.id);
+  } else {
+    album.stats = { total: 0, avg: null };
+  }
+  return album;
+}
 
-  // Custom/DSP albums stored in our DB (non-Spotify IDs)
+// GET /api/music/album/:id  — multi-source album detail
+// ID types: Spotify (22-char alphanum) | Apple/iTunes (numeric) |
+//           Deezer (numeric, prefixed dz-) | Last.fm (lastfm-X)
+// Fallback: search by ?artist=&title= query params
+app.get('/api/music/album/:id', async (req, res) => {
+  const id     = req.params.id;
+  const qTitle  = req.query.title  || '';
+  const qArtist = req.query.artist || '';
+
+  // ── 1. Check our own DB first ────────────────────────────
   const dbAlbum = db.prepare('SELECT * FROM albums WHERE itunes_id=?').get(id);
   if (dbAlbum) {
-    // Check if it's also in Spotify (might have been saved before migration)
-    const stats = db.prepare(`
-      SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg
-      FROM reviews WHERE album_id=?
-    `).get(dbAlbum.id);
-    // Try to enrich from Spotify if ID looks like a Spotify ID
-    if (/^[A-Za-z0-9]{22}$/.test(id)) {
-      try {
-        const sp = await spotifyFetch(`/albums/${id}`, CACHE_1H);
-        const album = formatAlbum(sp);
-        album.tracks = (sp.tracks?.items || []).map((t, i) => ({
-          number:   t.track_number || i + 1,
-          title:    t.name,
-          duration: t.duration_ms,
-          itunesUrl: t.external_urls?.spotify || '',
-        }));
-        album.stats = stats;
-        return res.json(album);
-      } catch { /* fall through to DB data */ }
-    }
+    const stats = db.prepare('SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg FROM reviews WHERE album_id=?').get(dbAlbum.id);
     return res.json({
       itunesId: dbAlbum.itunes_id, title: dbAlbum.title, artist: dbAlbum.artist,
       artwork: dbAlbum.artwork_url, year: dbAlbum.year, genre: dbAlbum.genre,
@@ -814,41 +820,73 @@ app.get('/api/music/album/:id', async (req, res) => {
     });
   }
 
-  // Fetch directly from Spotify
-  try {
-    const sp = await spotifyFetch(`/albums/${encodeURIComponent(id)}`, CACHE_1H);
-    if (!sp?.id) return res.status(404).json({ error: 'Album not found' });
-
-    const album = formatAlbum(sp);
-    album.tracks = (sp.tracks?.items || []).map((t, i) => ({
-      number:    t.track_number || i + 1,
-      title:     t.name,
-      duration:  t.duration_ms,
-      itunesUrl: t.external_urls?.spotify || '',
-    }));
-
-    // Attach review stats
-    const dbRow = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(id);
-    if (dbRow) {
-      album.stats = db.prepare(`
-        SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg,
-               SUM(CASE WHEN rating=5    THEN 1 ELSE 0 END) as r5,
-               SUM(CASE WHEN rating=4.5  THEN 1 ELSE 0 END) as r4h,
-               SUM(CASE WHEN rating=4    THEN 1 ELSE 0 END) as r4,
-               SUM(CASE WHEN rating=3.5  THEN 1 ELSE 0 END) as r3h,
-               SUM(CASE WHEN rating=3    THEN 1 ELSE 0 END) as r3,
-               SUM(CASE WHEN rating<=2.5 THEN 1 ELSE 0 END) as rLow
-        FROM reviews WHERE album_id=?
-      `).get(dbRow.id);
-    } else {
-      album.stats = { total: 0, avg: null };
-    }
-
-    res.json(album);
-  } catch (err) {
-    console.error('Album fetch error:', err.message);
-    res.status(500).json({ error: 'Could not load album' });
+  // ── 2. Spotify ID (22-char alphanumeric) ─────────────────
+  if (/^[A-Za-z0-9]{22}$/.test(id)) {
+    try {
+      const sp = await spotifyFetch(`/albums/${id}`, CACHE_1H);
+      if (sp?.id) {
+        const album = formatAlbum(sp);
+        album.tracks = (sp.tracks?.items || []).map((t, i) => ({
+          number: t.track_number || i + 1, title: t.name,
+          duration: t.duration_ms, itunesUrl: t.external_urls?.spotify || '',
+        }));
+        return res.json(attachStats(album, id));
+      }
+    } catch { /* fall through */ }
   }
+
+  // ── 3. Numeric ID — try iTunes lookup ────────────────────
+  if (/^\d+$/.test(id)) {
+    try {
+      const data = await cachedFetch(
+        `https://itunes.apple.com/lookup?id=${id}&entity=song`, CACHE_1H
+      );
+      const results    = data.results || [];
+      const collection = results.find(r => r.wrapperType === 'collection' || r.collectionType === 'Album');
+      if (collection) {
+        const album  = formatAppleAlbum(collection);
+        album.tracks = results
+          .filter(r => r.wrapperType === 'track' && r.kind === 'song')
+          .map(t => ({ number: t.trackNumber, title: t.trackName, duration: t.trackTimeMillis, itunesUrl: t.trackViewUrl }));
+        return res.json(attachStats(album, id));
+      }
+    } catch { /* fall through */ }
+  }
+
+  // ── 4. Search by title + artist (Last.fm IDs, Deezer IDs, any unknown) ──
+  const searchTitle  = qTitle  || id.replace(/^(lastfm|deezer)-\d*/, '').trim();
+  const searchArtist = qArtist || '';
+  if (searchTitle || searchArtist) {
+    const q = [searchArtist, searchTitle].filter(Boolean).join(' ');
+    try {
+      // Try Spotify search first
+      const sp = await spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=album&limit=1&market=US`, CACHE_1H);
+      const hit = sp.albums?.items?.[0];
+      if (hit?.id) {
+        const full = await spotifyFetch(`/albums/${hit.id}`, CACHE_1H);
+        const album = formatAlbum(full);
+        album.tracks = (full.tracks?.items || []).map((t, i) => ({
+          number: t.track_number || i + 1, title: t.name,
+          duration: t.duration_ms, itunesUrl: t.external_urls?.spotify || '',
+        }));
+        return res.json(attachStats(album, id));
+      }
+    } catch { /* fall through */ }
+
+    // iTunes search fallback
+    try {
+      const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=1`;
+      const data = await cachedFetch(url, CACHE_1H);
+      const hit  = data.results?.[0];
+      if (hit) {
+        const album = formatAppleAlbum(hit);
+        album.tracks = [];
+        return res.json(attachStats(album, id));
+      }
+    } catch { /* fall through */ }
+  }
+
+  res.status(404).json({ error: 'Album not found' });
 });
 
 // ── DSP IMPORT ─────────────────────────────────────────────

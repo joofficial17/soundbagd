@@ -208,7 +208,12 @@ function escHtml(s) {
 
 // ── Album Card HTML ────────────────────────────────────────
 function albumCardHtml(album) {
-  const href = `album.html?id=${encodeURIComponent(album.itunesId)}`;
+  // Pass title+artist alongside ID so the album page can search by them
+  // if the ID is not a Spotify ID (e.g. Apple/Deezer numeric IDs)
+  const params = new URLSearchParams({ id: album.itunesId });
+  if (album.title)  params.set('title',  album.title);
+  if (album.artist) params.set('artist', album.artist);
+  const href = `album.html?${params.toString()}`;
   const tag  = album.mediaType && album.mediaType !== 'Album' ? `<span class="tag" style="font-size:0.65rem">${escHtml(album.mediaType)}</span>` : '';
   return `
     <div class="album-card" onclick="location.href='${href}'">

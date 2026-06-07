@@ -309,8 +309,13 @@ async function initPage() {
   const id      = params.get('id');
   if (!id) { document.getElementById('albumHeaderContent').innerHTML = '<div style="color:var(--coral)">No album ID provided.</div>'; return; }
 
+  // Pass title+artist so the server can search by them if the ID isn't a Spotify ID
+  const apiParams = new URLSearchParams({ id });
+  if (params.get('title'))  apiParams.set('title',  params.get('title'));
+  if (params.get('artist')) apiParams.set('artist', params.get('artist'));
+
   try {
-    _album = await api.get(`/api/music/album/${encodeURIComponent(id)}`);
+    _album = await api.get(`/api/music/album/${encodeURIComponent(id)}?${apiParams.toString()}`);
     renderAlbumHeader(_album);
     renderTracklist(_album);
     renderRatingCard(_album);
