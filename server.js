@@ -324,63 +324,49 @@ app.get('/api/auth/me', auth, (req, res) => {
   res.json(u);
 });
 
-// ── MUSIC ROUTES (Spotify Web API) ─────────────────────────
+// ── MUSIC ROUTES ────────────────────────────────────────────
+// Charts/browse: Apple Music RSS + iTunes (reliable, no auth)
+// Search + album detail: Spotify (rich metadata, links)
 
-// GET /api/music/trending
-// Spotify Client Credentials cannot access playlists, so we:
-// 1. Search across popular genres for 2025/2026 albums (parallel)
-// 2. Batch-fetch full album objects to get real popularity scores
-// 3. Sort by popularity desc, return top 50 unique albums
 const CACHE_6H = 6 * 60 * 60 * 1000;
 
+// ── iTunes / Apple helpers (for charts & genre browse) ──────
+function artworkHQ(url, size = 600) {
+  if (!url) return '';
+  return url.replace(/\d+x\d+bb/, `${size}x${size}bb`).replace(/\d+x\d+/, `${size}x${size}`);
+}
+function formatAppleAlbum(item) {
+  return {
+    itunesId:   String(item.collectionId || item.id || ''),
+    title:      item.collectionName || item.name || '',
+    artist:     item.artistName     || '',
+    artwork:    artworkHQ(item.artworkUrl100 || item.artworkUrl60 || ''),
+    year:       item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
+    genre:      item.primaryGenreName || item.genres?.[0]?.name || '',
+    mediaType:  item.collectionType || 'Album',
+    trackCount: item.trackCount || null,
+    itunesUrl:  item.collectionViewUrl || item.url || '',
+  };
+}
+
+// GET /api/music/trending — Apple Music Top 50 (stream-based chart)
 app.get('/api/music/trending', async (req, res) => {
   try {
-    const year  = new Date().getFullYear();
-    const terms = [
-      `year:${year}`,
-      `year:${year - 1}`,
-      'top hits',
-      'hip-hop',
-      'pop',
-      'r-n-b',
-    ];
-
-    // Run all searches in parallel
-    const searches = await Promise.allSettled(
-      terms.map(t =>
-        spotifyFetch(`/search?q=${encodeURIComponent(t)}&type=album&limit=50&market=US`, CACHE_6H)
-      )
+    const data = await cachedFetch(
+      'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
+      CACHE_1H
     );
-
-    // Collect unique album IDs
-    const seen = new Set();
-    const ids  = [];
-    for (const s of searches) {
-      if (s.status !== 'fulfilled') continue;
-      for (const a of (s.value.albums?.items || [])) {
-        if (a?.id && !seen.has(a.id)) { seen.add(a.id); ids.push(a.id); }
-      }
-    }
-
-    // Batch-fetch full album objects (20 per request) for popularity scores
-    const chunks = [];
-    for (let i = 0; i < Math.min(ids.length, 100); i += 20)
-      chunks.push(ids.slice(i, i + 20));
-
-    const fullAlbums = (
-      await Promise.all(
-        chunks.map(chunk =>
-          spotifyFetch(`/albums?ids=${chunk.join(',')}&market=US`, CACHE_6H)
-            .then(d => d.albums || [])
-            .catch(() => [])
-        )
-      )
-    ).flat().filter(a => a?.id);
-
-    // Sort by Spotify popularity score (0-100) descending
-    fullAlbums.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-
-    res.json(fullAlbums.slice(0, 50).map(formatAlbum));
+    const albums = (data.feed?.results || []).map(item => ({
+      itunesId:  String(item.id),
+      title:     item.name,
+      artist:    item.artistName,
+      artwork:   artworkHQ(item.artworkUrl100),
+      year:      item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
+      genre:     item.genres?.[0]?.name || '',
+      mediaType: 'Album',
+      itunesUrl: item.url || '',
+    }));
+    res.json(albums);
   } catch (err) {
     console.error('Trending error:', err.message);
     res.status(500).json({ error: 'Could not load trending' });
@@ -388,61 +374,36 @@ app.get('/api/music/trending', async (req, res) => {
 });
 
 // GET /api/music/genre-chart?genre=Hip-Hop&limit=25
+// iTunes genreTerm search — each genre returns genuinely different results
 app.get('/api/music/genre-chart', async (req, res) => {
   const { genre, limit = 25 } = req.query;
   if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
 
-  const genreMap = {
-    'Country':    'country',
-    'Hip-Hop':    'hip-hop',
-    'Pop':        'pop',
-    'R&B':        'r-n-b',
-    'Rock':       'rock',
-    'Jazz':       'jazz',
-    'Electronic': 'electronic',
-    'Indie':      'indie',
-    'Folk':       'folk',
-    'Latin':      'latin',
-    'Classical':  'classical',
-    'Metal':      'metal',
-    'K-Pop':      'k-pop',
+  const genreTermMap = {
+    'Country':    'Country',
+    'Hip-Hop':    'Hip-Hop/Rap',
+    'Pop':        'Pop',
+    'R&B':        'R&B/Soul',
+    'Rock':       'Rock',
+    'Jazz':       'Jazz',
+    'Electronic': 'Electronic',
+    'Indie':      'Alternative',
+    'Folk':       'Folk',
+    'Latin':      'Latino',
+    'Classical':  'Classical',
+    'Metal':      'Metal',
+    'K-Pop':      'K-Pop',
   };
-  const term = genreMap[genre] || genre.toLowerCase();
+  const term = genreTermMap[genre] || genre;
   const lim  = Math.min(Number(limit), 50);
 
   try {
-    // Two parallel searches: genre filter + genre keyword for broader coverage
-    const [g1, g2] = await Promise.allSettled([
-      spotifyFetch(`/search?q=genre%3A${encodeURIComponent(term)}&type=album&limit=50&market=US`, CACHE_1H),
-      spotifyFetch(`/search?q=${encodeURIComponent(genre)}+music&type=album&limit=50&market=US`, CACHE_1H),
-    ]);
-
-    const seen = new Set();
-    const ids  = [];
-    for (const s of [g1, g2]) {
-      if (s.status !== 'fulfilled') continue;
-      for (const a of (s.value.albums?.items || [])) {
-        if (a?.id && !seen.has(a.id)) { seen.add(a.id); ids.push(a.id); }
-      }
-    }
-
-    // Batch-fetch full albums for popularity, then sort
-    const chunks = [];
-    for (let i = 0; i < Math.min(ids.length, 60); i += 20)
-      chunks.push(ids.slice(i, i + 20));
-
-    const fullAlbums = (
-      await Promise.all(
-        chunks.map(chunk =>
-          spotifyFetch(`/albums?ids=${chunk.join(',')}&market=US`, CACHE_1H)
-            .then(d => d.albums || [])
-            .catch(() => [])
-        )
-      )
-    ).flat().filter(a => a?.id);
-
-    fullAlbums.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-    res.json(fullAlbums.slice(0, lim).map(formatAlbum));
+    const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${lim}&country=us`;
+    const data = await cachedFetch(url, CACHE_1H);
+    const albums = (data.results || [])
+      .filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection')
+      .map(formatAppleAlbum);
+    res.json(albums);
   } catch (err) {
     console.error('Genre chart error:', err.message);
     res.status(500).json({ error: 'Could not load genre chart' });
@@ -450,16 +411,17 @@ app.get('/api/music/genre-chart', async (req, res) => {
 });
 
 // GET /api/music/new-releases?limit=50
+// iTunes date-sorted recent releases — distinct from trending
 app.get('/api/music/new-releases', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 50);
+  const year  = new Date().getFullYear();
   try {
-    const data = await spotifyFetch(
-      `/browse/new-releases?limit=${limit}&country=US`,
-      CACHE_1H
-    );
-    const albums = (data.albums?.items || [])
-      .filter(a => a && a.id)
-      .map(formatAlbum);
+    const url  = `https://itunes.apple.com/search?term=${year}+new+releases&entity=album&limit=${limit}&country=us`;
+    const data = await cachedFetch(url, CACHE_1H);
+    const albums = (data.results || [])
+      .filter(r => r.collectionType === 'Album' && r.releaseDate)
+      .sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
+      .map(formatAppleAlbum);
     res.json(albums);
   } catch (err) {
     console.error('New releases error:', err.message);

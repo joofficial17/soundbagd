@@ -384,13 +384,39 @@ function renderTracklist(a) {
     document.getElementById('tracklistSection').style.display = 'none';
     return;
   }
-  document.getElementById('tracklistEl').innerHTML = a.tracks.map(t => `
-    <div class="track-item">
+  document.getElementById('tracklistEl').innerHTML = a.tracks.map(t => {
+    // Build a track object that openReviewModal can use
+    const trackObj = {
+      itunesId:  t.itunesUrl ? t.itunesUrl.split('/').pop().split('?')[0] : `track-${a.itunesId}-${t.number}`,
+      title:     t.title,
+      artist:    a.artist,
+      artwork:   a.artwork,
+      year:      a.year,
+      genre:     a.genre,
+      mediaType: 'Track',
+      itunesUrl: t.itunesUrl || '',
+      albumName: a.title,
+    };
+    const trackJson = JSON.stringify(trackObj).replace(/"/g, '&quot;');
+    const user = typeof auth !== 'undefined' ? auth.getUser() : null;
+    const reviewBtn = user
+      ? `<button onclick="event.stopPropagation();openReviewModal(JSON.parse(this.dataset.track))"
+           data-track="${trackJson}"
+           title="Review this track"
+           style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0 8px;font-size:1rem;transition:var(--transition)"
+           onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-muted)'">★</button>`
+      : '';
+    return `
+    <div class="track-item" style="cursor:default">
       <span class="track-item__num">${t.number || ''}</span>
       <span class="track-item__title">${escHtml(t.title)}</span>
-      ${t.itunesUrl ? `<a href="${escHtml(t.itunesUrl)}" target="_blank" rel="noopener" class="text-xs muted" style="margin-left:auto;padding-right:12px;transition:var(--transition)" title="Open in Spotify" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color=''">♫</a>` : '<span style="margin-left:auto"></span>'}
+      <span style="margin-left:auto;display:flex;align-items:center;gap:4px">
+        ${reviewBtn}
+        ${t.itunesUrl ? `<a href="${escHtml(t.itunesUrl)}" target="_blank" rel="noopener" class="text-xs muted" style="padding-right:8px;transition:var(--transition)" title="Open in Spotify" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color=''">♫</a>` : ''}
+      </span>
       <span class="track-item__duration">${ms(t.duration)}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderRatingCard(a) {
