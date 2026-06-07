@@ -489,6 +489,29 @@ async function deezerFetch(path, ttl = CACHE_1H) {
   return cachedFetch('https://api.deezer.com' + path, ttl);
 }
 
+// Last.fm's "no image" placeholder — ignore these
+const LASTFM_PLACEHOLDER = '2a96cbd8b46e442fc41c2b86b821562f';
+function validArtwork(url) {
+  return url && !url.includes(LASTFM_PLACEHOLDER) ? url : '';
+}
+
+// After aggregation, enrich albums that still have no artwork via iTunes
+async function enrichArtwork(albums) {
+  const missing = albums.filter(a => !a.artwork);
+  if (!missing.length) return albums;
+
+  await Promise.allSettled(missing.map(async a => {
+    try {
+      const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(a.artist + ' ' + a.title)}&entity=album&limit=1`;
+      const data = await cachedFetch(url, CACHE_6H);
+      const hit  = data.results?.[0];
+      if (hit?.artworkUrl100) a.artwork = artworkHQ(hit.artworkUrl100);
+    } catch { /* leave empty */ }
+  }));
+
+  return albums;
+}
+
 // ── Chart aggregation core ───────────────────────────────────
 // Normalise "Artist — Title" into a stable key for cross-source matching
 function chartKey(artist, title) {
@@ -569,7 +592,7 @@ app.get('/api/music/trending', async (req, res) => {
             itunesId:  `lastfm-${t.mbid || i}`,
             title:     t.album?.title || t.name,
             artist:    t.artist.name,
-            artwork:   t.image?.find(img => img.size === 'extralarge')?.['#text'] || '',
+            artwork:   validArtwork(t.image?.find(img => img.size === 'extralarge')?.['#text'] || ''),
             year:      null,
             genre:     '',
             mediaType: 'Album',
@@ -580,7 +603,7 @@ app.get('/api/music/trending', async (req, res) => {
 
   ]);
 
-  const results = scores.sorted(50);
+  const results = await enrichArtwork(scores.sorted(50));
   if (!results.length) return res.status(500).json({ error: 'Could not load trending' });
   res.json(results);
 });
@@ -620,7 +643,7 @@ app.get('/api/music/genre-chart', async (req, res) => {
           itunesId:  `lastfm-${a.mbid || i}`,
           title:     a.name,
           artist:    a.artist.name,
-          artwork:   a.image?.find(img => img.size === 'extralarge')?.['#text'] || '',
+          artwork:   validArtwork(a.image?.find(img => img.size === 'extralarge')?.['#text'] || ''),
           year:      null,
           genre,
           mediaType: 'Album',
@@ -647,9 +670,47 @@ app.get('/api/music/genre-chart', async (req, res) => {
 
   ]);
 
-  const results = scores.sorted(lim);
+  const results = await enrichArtwork(scores.sorted(lim));
   if (!results.length) return res.status(500).json({ error: 'Could not load genre chart' });
   res.json(results);
+});
+
+// GET /api/music/artist-albums?artist=NAME — artist discography via Spotify search
+app.get('/api/music/artist-albums', async (req, res) => {
+  const { artist } = req.query;
+  if (!artist?.trim()) return res.status(400).json({ error: 'artist required' });
+  try {
+    // Search Spotify for albums by this artist
+    const data = await spotifyFetch(
+      `/search?q=artist:${encodeURIComponent(artist)}&type=album&limit=50&market=US`,
+      CACHE_1H
+    );
+    let albums = (data.albums?.items || [])
+      .filter(a => a?.id && a.artists?.some(ar => ar.name.toLowerCase() === artist.toLowerCase()))
+      .map(formatAlbum);
+
+    // Fallback: looser artist match if strict match returns nothing
+    if (!albums.length) {
+      albums = (data.albums?.items || []).filter(a => a?.id).map(formatAlbum);
+    }
+
+    // Sort by release year descending (newest first)
+    albums.sort((a, b) => (b.year || 0) - (a.year || 0));
+    res.json(albums);
+  } catch (err) {
+    // iTunes fallback
+    try {
+      const url  = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=album&attribute=artistTerm&limit=50`;
+      const data = await cachedFetch(url, CACHE_1H);
+      const albums = (data.results || [])
+        .filter(r => r.collectionType === 'Album')
+        .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
+        .map(formatAppleAlbum);
+      res.json(albums);
+    } catch {
+      res.status(500).json({ error: 'Could not load discography' });
+    }
+  }
 });
 
 // GET /api/music/new-releases?limit=50 — Apple iTunes (date-sorted)
