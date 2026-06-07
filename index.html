@@ -17,7 +17,6 @@
       <li><a href="index.html" class="active">Explore</a></li>
       <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
       <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
-      <li><a href="recommendations.html">For You</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -71,8 +70,7 @@
     </div>
     <!-- Trending strip — grid: 3 rows × N columns, scrolls horizontally -->
     <div class="trending-strip" id="trendingStrip">
-      <!-- Skeleton cards (24 = 3 rows × 8 cols) -->
-      ${Array(24).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('')}
+      <div style="color:var(--text-muted);font-size:.875rem;padding:20px">Loading charts…</div>
     </div>
   </div>
 </section>
@@ -130,11 +128,11 @@
       <aside>
         <!-- Popular albums this week -->
         <div style="margin-bottom:32px">
-          <div class="section__header" style="margin-bottom:16px">
-            <h2 class="h4">📅 Popular Right Now</h2>
+          <div class="section__header" style="margin-bottom:4px">
+            <h2 class="h4">📅 Most Streamed Today</h2>
           </div>
+          <div class="text-xs muted" style="margin-bottom:12px">Apple Music • Updated daily</div>
           <div id="popularList">
-            <!-- Populated by JS from trending data -->
             <div style="color:var(--text-muted);font-size:.85rem;padding:12px 0">Loading charts…</div>
           </div>
         </div>
@@ -154,15 +152,21 @@
 </section>
 
 <!-- ── New Releases ────────────────────────────────────────── -->
-<section class="section" style="background:var(--bg-card)">
+<section class="section" style="background:var(--bg-card)" id="newReleasesSection">
   <div class="container">
     <div class="section__header">
       <h2 class="h2">New <em class="serif" style="font-style:italic;color:var(--gold)">Releases</em></h2>
-      <a href="#trending" class="section__link">Browse All →</a>
+      <button id="newReleasesBrowseAll" class="section__link" style="background:none;border:none;cursor:pointer;font-size:.8rem;color:var(--gold);font-weight:600;letter-spacing:.04em" onclick="toggleNewReleases()">Browse All →</button>
     </div>
-    <div class="grid-albums grid-albums--lg" id="newReleasesGrid">
-      <!-- Skeletons -->
-      ${Array(5).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('')}
+    <!-- Compact grid (default 10) -->
+    <div id="newReleasesCompact">
+      <div class="grid-albums grid-albums--lg" id="newReleasesGrid">
+        <div style="color:var(--text-muted);font-size:.875rem">Loading…</div>
+      </div>
+    </div>
+    <!-- Expanded sliding strip (Browse All view) -->
+    <div id="newReleasesExpanded" style="display:none">
+      <div class="trending-strip" id="newReleasesStrip" style="grid-template-rows:repeat(2,auto)"></div>
     </div>
   </div>
 </section>
@@ -197,46 +201,85 @@
 
 <script src="app.js"></script>
 <script>
-let _allTrending = [];
+let _allTrending    = [];
+let _newReleases    = [];
+let _newRelExpanded = false;
 
 async function initPage() {
   loadTrending();
+  loadNewReleases();
   loadRecentReviews();
   loadSiteStats();
 }
 
+// ── Trending (Apple Music Top 50 Most Played) ───────────────
 async function loadTrending() {
   try {
     const albums = await api.get('/api/music/trending');
     _allTrending = albums;
 
-    // Trending strip — grid layout (3 rows × N cols, scrolls horizontally)
-    const strip = document.getElementById('trendingStrip');
-    strip.innerHTML = albums.map(a => albumCardHtml(a)).join('');
-
-    // Popular sidebar (top 5)
-    const list = document.getElementById('popularList');
-    list.innerHTML = albums.slice(0, 5).map((a, i) => `
-      <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'" style="padding:10px 12px">
-        <div class="top5-item__num">${i + 1}</div>
-        <div class="top5-item__art"><img src="${escHtml(a.artwork)}" alt="" loading="lazy"></div>
-        <div class="top5-item__info">
-          <div class="top5-item__title">${escHtml(a.title)}</div>
-          <div class="top5-item__sub">${escHtml(a.artist)}</div>
-        </div>
-      </div>`).join('');
-
-    // New Releases grid
-    const grid = document.getElementById('newReleasesGrid');
-    grid.innerHTML = albums.slice(0, 10).map(a => albumCardHtml(a)).join('');
-
-    document.getElementById('trendingSource').textContent = 'Apple Music Most Played';
-  } catch (err) {
+    // Trending strip — 3-row grid, scrolls horizontally
     document.getElementById('trendingStrip').innerHTML =
-      `<div style="grid-column:span 3;color:var(--text-muted);padding:20px;font-size:.875rem">Could not load trending — is the server running?</div>`;
+      albums.map(a => albumCardHtml(a)).join('');
+
+    // "Most Streamed Today" sidebar — top 10
+    document.getElementById('popularList').innerHTML =
+      albums.slice(0, 10).map((a, i) => `
+        <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'" style="padding:8px 10px">
+          <div class="top5-item__num" style="font-size:1.1rem;min-width:22px">${i + 1}</div>
+          <div class="top5-item__art"><img src="${escHtml(a.artwork)}" alt="" loading="lazy"></div>
+          <div class="top5-item__info">
+            <div class="top5-item__title" style="font-size:.82rem">${escHtml(a.title)}</div>
+            <div class="top5-item__sub" style="font-size:.74rem">${escHtml(a.artist)}</div>
+          </div>
+        </div>`).join('');
+
+    document.getElementById('trendingSource').textContent = 'Apple Music Top 50 — Most Played';
+  } catch {
+    document.getElementById('trendingStrip').innerHTML =
+      '<div style="color:var(--text-muted);padding:20px;font-size:.875rem">Could not load trending — is the server running?</div>';
   }
 }
 
+// ── New Releases (separate fetch, date-sorted) ──────────────
+async function loadNewReleases() {
+  try {
+    _newReleases = await api.get('/api/music/new-releases?limit=50');
+    renderNewReleasesCompact();
+  } catch {
+    document.getElementById('newReleasesGrid').innerHTML =
+      '<div style="color:var(--text-muted);font-size:.875rem">Could not load new releases.</div>';
+  }
+}
+
+function renderNewReleasesCompact() {
+  // Default view: first 10 in a grid
+  document.getElementById('newReleasesGrid').innerHTML =
+    _newReleases.slice(0, 10).map(a => albumCardHtml(a)).join('');
+}
+
+function toggleNewReleases() {
+  _newRelExpanded = !_newRelExpanded;
+  const compact  = document.getElementById('newReleasesCompact');
+  const expanded = document.getElementById('newReleasesExpanded');
+  const btn      = document.getElementById('newReleasesBrowseAll');
+
+  if (_newRelExpanded) {
+    compact.style.display  = 'none';
+    expanded.style.display = '';
+    btn.textContent = '← Show Less';
+    // Populate the 2-row sliding strip with all 50 releases
+    document.getElementById('newReleasesStrip').innerHTML =
+      _newReleases.map(a => albumCardHtml(a)).join('');
+    document.getElementById('newReleasesSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    compact.style.display  = '';
+    expanded.style.display = 'none';
+    btn.textContent = 'Browse All →';
+  }
+}
+
+// ── Recent Reviews ──────────────────────────────────────────
 async function loadRecentReviews(limit = 20) {
   try {
     const reviews = await api.get(`/api/reviews/recent?limit=${limit}`);
@@ -254,6 +297,7 @@ async function loadRecentReviews(limit = 20) {
   } catch { /* server not running */ }
 }
 
+// ── Site Stats ──────────────────────────────────────────────
 async function loadSiteStats() {
   try {
     const stats = await api.get('/api/stats');
@@ -263,32 +307,18 @@ async function loadSiteStats() {
   } catch { /* server not running */ }
 }
 
-// iTunes genre IDs for accurate filtering
-const genreIds = {
-  'Country':    6,
-  'Hip-Hop':    18,
-  'Pop':        14,
-  'R&B':        15,
-  'Rock':       21,
-  'Jazz':       11,
-  'Electronic': 7,
-  'Indie':      1222,
-  'Folk':       1219,
-  'Latin':      12,
-  'Classical':  5,
-  'Metal':      1203,
-  'K-Pop':      51,
-};
-
+// ── Genre Browser ───────────────────────────────────────────
+// Uses the dedicated /api/music/genre-chart endpoint which filters
+// by genreTerm attribute — so each genre returns different results
 function filterGenre(btn, genre) {
   document.querySelectorAll('#genreTags button').forEach(t => {
     t.classList.remove('tag--gold'); t.classList.add('tag');
   });
   btn.classList.remove('tag'); btn.classList.add('tag--gold');
 
-  const resultsEl   = document.getElementById('genreResults');
-  const gridEl      = document.getElementById('genreGrid');
-  const labelEl     = document.getElementById('genreActiveLabel');
+  const resultsEl = document.getElementById('genreResults');
+  const gridEl    = document.getElementById('genreGrid');
+  const labelEl   = document.getElementById('genreActiveLabel');
 
   if (!genre) {
     resultsEl.style.display = 'none';
@@ -296,28 +326,29 @@ function filterGenre(btn, genre) {
     return;
   }
 
-  // Show full-width results
   resultsEl.style.display = '';
-  if (labelEl) labelEl.textContent = `Showing ${genre} albums`;
-  gridEl.innerHTML = Array(8).fill('<div class="album-card" style="pointer-events:none"><div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div><div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div><div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div></div>').join('');
+  if (labelEl) labelEl.textContent = `Top albums in ${genre}`;
 
-  // Scroll to genre section
-  document.getElementById('genreBrowseSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Show skeleton while loading
+  gridEl.innerHTML = Array.from({length: 10}, () => `
+    <div class="album-card" style="pointer-events:none">
+      <div style="aspect-ratio:1;border-radius:var(--radius-md);background:var(--bg-raised);animation:pulse 1.5s ease infinite"></div>
+      <div style="height:12px;background:var(--bg-raised);border-radius:4px;margin:8px 0 4px;animation:pulse 1.5s ease infinite"></div>
+      <div style="height:10px;background:var(--bg-raised);border-radius:4px;width:70%;animation:pulse 1.5s ease infinite"></div>
+    </div>`).join('');
 
-  const genreId = genreIds[genre];
-  const url = genreId
-    ? `/api/music/search?q=album&type=album&limit=20&genreId=${genreId}`
-    : `/api/music/search?q=${encodeURIComponent(genre)}+music&type=album&limit=20`;
+  document.getElementById('genreBrowseSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  api.get(url)
+  api.get(`/api/music/genre-chart?genre=${encodeURIComponent(genre)}&limit=25`)
     .then(albums => {
       if (!albums.length) {
-        gridEl.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">No results found for ${escHtml(genre)}.</div>`;
+        gridEl.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0;grid-column:1/-1">No results found for "${escHtml(genre)}".</div>`;
         return;
       }
       gridEl.innerHTML = albums.map(a => albumCardHtml(a)).join('');
-    }).catch(() => {
-      gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load results.</div>';
+    })
+    .catch(() => {
+      gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0;grid-column:1/-1">Could not load results.</div>';
     });
 }
 </script>

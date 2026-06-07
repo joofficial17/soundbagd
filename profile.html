@@ -17,7 +17,6 @@
       <li><a href="index.html">Explore</a></li>
       <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
       <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
-      <li><a href="recommendations.html">For You</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -129,7 +128,12 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
           <h2 class="h4">Year in Review</h2>
           <select id="yearSelect" style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:6px 12px;font-size:.85rem;outline:none;cursor:pointer" onchange="loadYearStats()">
-            ${Array.from({length:6},(_, i) => 2025 - i).map(y => `<option value="${y}">${y}</option>`).join('')}
+            <option value="2026" selected>2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+            <option value="2022">2022</option>
+            <option value="2021">2021</option>
           </select>
         </div>
         <div id="yearStatsContent">

@@ -291,7 +291,7 @@ app.get('/api/music/trending', async (req, res) => {
   try {
     // Apple's official charts RSS (completely free, no key)
     const data = await cachedFetch(
-      'https://rss.applemarketingtools.com/api/v2/us/music/most-played/25/albums.json',
+      'https://rss.applemarketingtools.com/api/v2/us/music/most-played/50/albums.json',
       CACHE_1H
     );
     const albums = (data.feed?.results || []).map(item => ({
@@ -315,6 +315,66 @@ app.get('/api/music/trending', async (req, res) => {
       );
       res.json((data.results || []).filter(r => r.collectionType).map(formatAlbum));
     } catch { res.json([]); }
+  }
+});
+
+// GET /api/music/genre-chart?genre=Hip-Hop&limit=25
+// Returns top albums in a specific genre using iTunes genreTerm attribute search
+app.get('/api/music/genre-chart', async (req, res) => {
+  const { genre, limit = 25 } = req.query;
+  if (!genre?.trim()) return res.status(400).json({ error: 'genre required' });
+
+  // Map display genre names → iTunes attribute search terms
+  const itunesToGenreTerm = {
+    'Country':    'Country',
+    'Hip-Hop':    'Hip-Hop/Rap',
+    'Pop':        'Pop',
+    'R&B':        'R&B/Soul',
+    'Rock':       'Rock',
+    'Jazz':       'Jazz',
+    'Electronic': 'Electronic',
+    'Indie':      'Alternative',
+    'Folk':       'Folk',
+    'Latin':      'Latino',
+    'Classical':  'Classical',
+    'Metal':      'Metal',
+    'K-Pop':      'K-Pop',
+  };
+  const term = itunesToGenreTerm[genre] || genre;
+
+  try {
+    // attribute=genreTerm makes iTunes match the search term against genre field
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&attribute=genreTerm&limit=${Math.min(Number(limit), 50)}&country=us`;
+    const data = await cachedFetch(url, CACHE_1H);
+    const albums = (data.results || [])
+      .filter(r => r.collectionType === 'Album' || r.wrapperType === 'collection')
+      .map(formatAlbum);
+    res.json(albums);
+  } catch (err) {
+    console.error('Genre chart error:', err.message);
+    res.status(500).json({ error: 'Could not load genre chart' });
+  }
+});
+
+// GET /api/music/new-releases?limit=50
+// Returns recently released albums, distinct from "most-played" trending
+app.get('/api/music/new-releases', async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 50);
+  const year  = new Date().getFullYear();
+  const prevYear = year - 1;
+
+  try {
+    // Search iTunes for albums from the current and previous year, sorted by recency
+    const url = `https://itunes.apple.com/search?term=${year}+${prevYear}+new+music&entity=album&limit=${limit}&country=us`;
+    const data = await cachedFetch(url, CACHE_1H);
+    const albums = (data.results || [])
+      .filter(r => r.collectionType === 'Album' && r.releaseDate)
+      .sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
+      .map(formatAlbum);
+    res.json(albums);
+  } catch (err) {
+    console.error('New releases error:', err.message);
+    res.status(500).json({ error: 'Could not load new releases' });
   }
 });
 
