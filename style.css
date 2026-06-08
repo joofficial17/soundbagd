@@ -1030,6 +1030,11 @@ body.mobile-view .container,
 body.mobile-view .container--wide,
 body.mobile-view .container--narrow { padding: 0 16px; }
 body.mobile-view #viewToggle { bottom: 72px; }
+body.mobile-view #mobileSearchBar { display: block !important; }
+
+@media (max-width: 768px) {
+  body:not(.force-desktop) #mobileSearchBar { display: block !important; }
+}
 
 /* ── Scrollbar ────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 8px; background: var(--bg); }

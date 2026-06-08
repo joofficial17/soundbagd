@@ -63,6 +63,17 @@
   </div>
 </section>
 
+<!-- ── Mobile Search Bar (hidden on desktop, shown in mobile view) ── -->
+<div id="mobileSearchBar" style="display:none;padding:12px 16px;background:var(--bg-card);border-bottom:1px solid var(--border)">
+  <div style="position:relative;max-width:600px;margin:0 auto">
+    <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="text" id="mobileSearchInput" placeholder="Search albums, artists…" autocomplete="off"
+      style="width:100%;padding:11px 16px 11px 42px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);font-size:.95rem;outline:none;box-sizing:border-box"
+      onfocus="this.style.borderColor='var(--gold)';this.style.boxShadow='0 0 0 3px rgba(212,175,55,.18)'"
+      onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+  </div>
+</div>
+
 <!-- ── Trending ────────────────────────────────────────────── -->
 <section class="section" id="trending">
   <div class="container">
@@ -208,6 +219,22 @@ let _newReleases    = [];
 let _newRelExpanded = false;
 
 async function initPage() {
+  // Show the mobile search bar when in mobile view
+  updateMobileSearchBar();
+
+  // Wire mobile search input to the same handler as the desktop nav search
+  const mobileInput = document.getElementById('mobileSearchInput');
+  if (mobileInput) {
+    mobileInput.addEventListener('input', function() {
+      // Sync to the hidden desktop search input so initSearch() picks it up
+      const desktopInput = document.getElementById('searchInput');
+      if (desktopInput) {
+        desktopInput.value = this.value;
+        desktopInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }
+
   loadTrending();
   loadNewReleases();
   loadRecentReviews();
@@ -358,6 +385,18 @@ function filterGenre(btn, genre) {
       gridEl.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0;grid-column:1/-1">Could not load results.</div>';
     });
 }
+
+function updateMobileSearchBar() {
+  const bar = document.getElementById('mobileSearchBar');
+  if (!bar) return;
+  const isMobile = document.body.classList.contains('mobile-view')
+    || (!document.body.classList.contains('force-desktop') && window.innerWidth <= 768);
+  bar.style.display = isMobile ? 'block' : 'none';
+}
+
+// Re-check whenever the view toggle fires
+window.addEventListener('resize', updateMobileSearchBar);
+document.addEventListener('viewModeChanged', updateMobileSearchBar);
 </script>
 </body>
 </html>

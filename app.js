@@ -1305,6 +1305,7 @@ function applyViewMode(mode) {
     document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1.0';
   }
   updateToggleLabel();
+  document.dispatchEvent(new Event('viewModeChanged'));
 }
 
 function toggleViewMode() {
