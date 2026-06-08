@@ -996,34 +996,44 @@ function showToast(msg) {
 
 // ── Search ─────────────────────────────────────────────────
 let _searchTimeout;
-function initSearch() {
-  const input = document.getElementById('searchInput');
-  if (!input) return;
-
-  let dropdown = document.getElementById('searchDropdown');
+function makeSearchDropdown(id, parentEl) {
+  let dropdown = document.getElementById(id);
   if (!dropdown) {
     dropdown = document.createElement('div');
-    dropdown.id = 'searchDropdown';
-    dropdown.style.cssText = `
-      position:absolute;top:calc(100% + 6px);left:0;right:0;
-      background:var(--bg-card);border:1px solid var(--border-md);border-radius:var(--radius-lg);
-      box-shadow:var(--shadow-hover);z-index:200;display:none;overflow:hidden;
-      max-height:360px;overflow-y:auto;
-    `;
-    input.parentElement.style.position = 'relative';
-    input.parentElement.appendChild(dropdown);
+    dropdown.id = id;
+    dropdown.style.cssText = 'position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border-md);border-radius:var(--radius-lg);box-shadow:var(--shadow-hover);z-index:300;display:none;overflow:hidden;max-height:360px;overflow-y:auto;';
+    parentEl.style.position = 'relative';
+    parentEl.appendChild(dropdown);
   }
+  return dropdown;
+}
 
+function wireSearchInput(input, dropdown) {
   input.addEventListener('input', () => {
     clearTimeout(_searchTimeout);
     const q = input.value.trim();
     if (!q) { dropdown.style.display = 'none'; return; }
     _searchTimeout = setTimeout(() => runSearch(q, dropdown), 300);
   });
-
   document.addEventListener('click', (e) => {
     if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
   });
+}
+
+function initSearch() {
+  // Desktop nav search
+  const desktopInput = document.getElementById('searchInput');
+  if (desktopInput) {
+    const dropdown = makeSearchDropdown('searchDropdown', desktopInput.parentElement);
+    wireSearchInput(desktopInput, dropdown);
+  }
+
+  // Mobile search bar (index.html only — may not exist on other pages)
+  const mobileInput = document.getElementById('mobileSearchInput');
+  if (mobileInput) {
+    const dropdown = makeSearchDropdown('mobileSearchDropdown', mobileInput.parentElement);
+    wireSearchInput(mobileInput, dropdown);
+  }
 }
 
 async function runSearch(q, dropdown) {

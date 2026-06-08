@@ -222,19 +222,6 @@ async function initPage() {
   // Show the mobile search bar when in mobile view
   updateMobileSearchBar();
 
-  // Wire mobile search input to the same handler as the desktop nav search
-  const mobileInput = document.getElementById('mobileSearchInput');
-  if (mobileInput) {
-    mobileInput.addEventListener('input', function() {
-      // Sync to the hidden desktop search input so initSearch() picks it up
-      const desktopInput = document.getElementById('searchInput');
-      if (desktopInput) {
-        desktopInput.value = this.value;
-        desktopInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
-  }
-
   loadTrending();
   loadNewReleases();
   loadRecentReviews();
