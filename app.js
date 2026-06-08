@@ -67,10 +67,21 @@ const auth = {
         const name = profile.querySelector('.nav-username');
         if (name) name.textContent = user.username;
       }
+      // Show Admin link for mods and admins
+      const navLinks = document.querySelector('.nav__links');
+      if (navLinks && (user.role === 'mod' || user.role === 'admin')) {
+        if (!document.getElementById('navAdminLink')) {
+          const li = document.createElement('li');
+          li.innerHTML = '<a href="admin.html" id="navAdminLink" style="color:var(--gold)">🛡️ Admin</a>';
+          navLinks.appendChild(li);
+        }
+      }
     } else {
       if (signIn)  signIn.style.display  = '';
       if (join)    join.style.display    = '';
       if (profile) profile.style.display = 'none';
+      // Remove admin link if logged out
+      document.getElementById('navAdminLink')?.parentElement?.remove();
     }
   },
 };
@@ -257,6 +268,7 @@ function reviewCardHtml(r) {
         <button class="like-btn${isLiked ? ' liked' : ''}" style="margin-left:auto" onclick="toggleLike(${r.id || 0},this)">
           ♥ <span class="like-count">${likeCnt}</span>
         </button>
+        <button title="Flag this review" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:.85rem;padding:4px 6px;opacity:.5;transition:var(--transition)" onmouseover="this.style.opacity='1';this.style.color='#e05c5c'" onmouseout="this.style.opacity='.5';this.style.color='var(--text-muted)'" onclick="flagReview(${r.id || 0},this)">🚩</button>
       </div>
       ${hasText ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
       ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${tags.map(t => `<span class="mood-tag">#${escHtml(t)}</span>`).join('')}</div>` : ''}
@@ -274,6 +286,23 @@ async function toggleLike(reviewId, btn) {
     btn.classList.toggle('liked', data.liked);
   } catch (err) {
     showToast('Could not update like: ' + err.message);
+  }
+}
+
+// ── Flag review ────────────────────────────────────────────
+async function flagReview(reviewId, btn) {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  if (!reviewId) return;
+  const reason = prompt('Why are you flagging this review? (optional — leave blank to submit)');
+  if (reason === null) return; // user cancelled
+  try {
+    btn.disabled = true;
+    await api.post(`/api/reviews/${reviewId}/flag`, { reason });
+    btn.style.color = '#e05c5c'; btn.style.opacity = '1'; btn.title = 'Flagged — thank you';
+    showToast('Review flagged. Our moderators will review it shortly.');
+  } catch (err) {
+    showToast(err.message.includes('already') ? 'You already flagged this review.' : 'Could not flag: ' + err.message);
+    btn.disabled = false;
   }
 }
 

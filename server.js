@@ -155,6 +155,22 @@ db.exec(`
 
 // ── DB Migrations (add columns to existing tables) ────────
 try { db.exec("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''"); } catch {}
+
+// Flagged reviews table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS review_flags (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_id   INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    reporter_id INTEGER NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    reason      TEXT    DEFAULT '',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(review_id, reporter_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_flags_review ON review_flags(review_id);
+`);
 
 // ── In-Memory Cache ────────────────────────────────────────
 const cache    = new Map();
@@ -345,10 +361,28 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
+    // Refresh ban/role status from DB on every authenticated request
+    const u = db.prepare('SELECT banned, ban_reason, role FROM users WHERE id=?').get(req.user.id);
+    if (u?.banned) return res.status(403).json({ error: `Your account has been suspended${u.ban_reason ? ': ' + u.ban_reason : '.'}`, banned: true });
+    if (u) req.user.role = u.role;
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired session — please sign in again' });
   }
+}
+
+// Require mod or admin role
+function requireMod(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role !== 'mod' && req.user.role !== 'admin') return res.status(403).json({ error: 'Moderator access required' });
+  next();
+}
+
+// Require admin role only
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  next();
 }
 
 // ── AUTH ROUTES ────────────────────────────────────────────
@@ -387,8 +421,8 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (username,email,password_hash,initials,avatar_gradient) VALUES (?,?,?,?,?)'
     ).run(username, email, hash, initials, gradient);
 
-    const token = jwt.sign({ id: result.lastInsertRowid, username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: result.lastInsertRowid, username, email, initials, gradient } });
+    const token = jwt.sign({ id: result.lastInsertRowid, username, role: 'user' }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: result.lastInsertRowid, username, email, initials, gradient, role: 'user' } });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
       if (err.message.includes('username')) return res.status(409).json({ error: 'That username is already taken' });
@@ -411,10 +445,12 @@ app.post('/api/auth/login', async (req, res) => {
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
 
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+  if (user.banned) return res.status(403).json({ error: `Your account has been suspended${user.ban_reason ? ': ' + user.ban_reason : '.'}`, banned: true });
+
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '30d' });
   res.json({
     token,
-    user: { id: user.id, username: user.username, email: user.email, initials: user.initials, gradient: user.avatar_gradient, bio: user.bio },
+    user: { id: user.id, username: user.username, email: user.email, initials: user.initials, gradient: user.avatar_gradient, bio: user.bio, role: user.role || 'user' },
   });
 });
 
@@ -1681,6 +1717,122 @@ app.get('/api/stats', (req, res) => {
       (SELECT COUNT(*) FROM albums)  AS albums
   `).get();
   res.json(stats);
+});
+
+// ── FLAG ROUTES ────────────────────────────────────────────
+
+// POST /api/reviews/:id/flag  — any logged-in user can flag a review
+app.post('/api/reviews/:id/flag', auth, (req, res) => {
+  const reviewId = Number(req.params.id);
+  const review = db.prepare('SELECT id, user_id FROM reviews WHERE id=?').get(reviewId);
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+  if (review.user_id === req.user.id) return res.status(400).json({ error: "You can't flag your own review" });
+  const { reason } = req.body || {};
+  try {
+    db.prepare('INSERT OR IGNORE INTO review_flags (review_id, reporter_id, reason) VALUES (?,?,?)').run(reviewId, req.user.id, (reason || '').trim().slice(0, 500));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to flag review' });
+  }
+});
+
+// ── ADMIN / MOD ROUTES ──────────────────────────────────────
+
+// GET /api/admin/users?q=&limit=50  — list all users (mod+)
+app.get('/api/admin/users', auth, requireMod, (req, res) => {
+  const q     = (req.query.q || '').trim();
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const users = db.prepare(`
+    SELECT u.id, u.username, u.email, u.role, u.banned, u.ban_reason, u.created_at,
+           (SELECT COUNT(*) FROM reviews r WHERE r.user_id = u.id) AS review_count
+    FROM users u
+    WHERE u.username LIKE ?
+    ORDER BY u.created_at DESC
+    LIMIT ?
+  `).all(`%${q}%`, limit);
+  res.json(users);
+});
+
+// POST /api/admin/ban  — ban a user (mod+)
+app.post('/api/admin/ban', auth, requireMod, (req, res) => {
+  const { userId, reason } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  const target = db.prepare('SELECT id, role FROM users WHERE id=?').get(Number(userId));
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  // Mods can't ban other mods or admins
+  if ((target.role === 'mod' || target.role === 'admin') && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Only admins can ban moderators' });
+  db.prepare('UPDATE users SET banned=1, ban_reason=? WHERE id=?').run((reason || '').trim().slice(0, 500), target.id);
+  res.json({ success: true });
+});
+
+// POST /api/admin/unban  — restore a user (mod+)
+app.post('/api/admin/unban', auth, requireMod, (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  db.prepare('UPDATE users SET banned=0, ban_reason="" WHERE id=?').run(Number(userId));
+  res.json({ success: true });
+});
+
+// POST /api/admin/set-role  — promote/demote users (admin only)
+app.post('/api/admin/set-role', auth, requireAdmin, (req, res) => {
+  const { userId, role } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  if (!['user', 'mod', 'admin'].includes(role)) return res.status(400).json({ error: 'role must be user, mod, or admin' });
+  db.prepare('UPDATE users SET role=? WHERE id=?').run(role, Number(userId));
+  res.json({ success: true });
+});
+
+// DELETE /api/admin/reviews/:id  — remove any review (mod+)
+app.delete('/api/admin/reviews/:id', auth, requireMod, (req, res) => {
+  const reviewId = Number(req.params.id);
+  db.prepare('DELETE FROM reviews WHERE id=?').run(reviewId);
+  // Clear all flags for this review too (cascades via FK but let's be explicit)
+  res.json({ success: true });
+});
+
+// GET /api/admin/flags?limit=50  — get flagged reviews with context (mod+)
+app.get('/api/admin/flags', auth, requireMod, (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const flags = db.prepare(`
+    SELECT
+      rf.id AS flag_id,
+      rf.reason AS flag_reason,
+      rf.created_at AS flagged_at,
+      rf.review_id,
+      COUNT(rf2.id) AS total_flags,
+      r.rating, r.review_text, r.created_at AS review_date,
+      author.id AS author_id, author.username AS author_username,
+      reporter.username AS reporter_username,
+      a.title AS album_title, a.artist, a.artwork_url, a.itunes_id
+    FROM review_flags rf
+    JOIN review_flags rf2 ON rf2.review_id = rf.review_id
+    JOIN reviews r       ON r.id = rf.review_id
+    JOIN users author    ON author.id = r.user_id
+    JOIN users reporter  ON reporter.id = rf.reporter_id
+    JOIN albums a        ON a.id = r.album_id
+    GROUP BY rf.review_id
+    ORDER BY total_flags DESC, rf.created_at DESC
+    LIMIT ?
+  `).all(limit);
+  res.json(flags);
+});
+
+// POST /api/admin/flags/:reviewId/dismiss  — clear all flags for a review without deleting it (mod+)
+app.post('/api/admin/flags/:reviewId/dismiss', auth, requireMod, (req, res) => {
+  db.prepare('DELETE FROM review_flags WHERE review_id=?').run(Number(req.params.reviewId));
+  res.json({ success: true });
+});
+
+// GET /api/admin/stats  — quick dashboard counts (mod+)
+app.get('/api/admin/stats', auth, requireMod, (req, res) => {
+  res.json({
+    totalUsers:    db.prepare('SELECT COUNT(*) as c FROM users').get().c,
+    bannedUsers:   db.prepare('SELECT COUNT(*) as c FROM users WHERE banned=1').get().c,
+    totalReviews:  db.prepare('SELECT COUNT(*) as c FROM reviews').get().c,
+    flaggedReviews:db.prepare('SELECT COUNT(DISTINCT review_id) as c FROM review_flags').get().c,
+    totalAlbums:   db.prepare('SELECT COUNT(*) as c FROM albums').get().c,
+  });
 });
 
 // ── Catch-all: serve index.html for unknown routes ─────────

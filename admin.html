@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+  <style>
+    .admin-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:32px; }
+    .admin-tab  { padding:10px 22px; font-size:.875rem; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; color:var(--text-muted); transition:var(--transition); }
+    .admin-tab.active { border-bottom-color:var(--gold); color:var(--gold); }
+    .admin-tab:hover:not(.active) { color:var(--text); }
+
+    .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; margin-bottom:32px; }
+    .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px 20px; text-align:center; }
+    .stat-num  { font-size:1.8rem; font-weight:800; color:var(--gold); line-height:1; }
+    .stat-lbl  { font-size:.72rem; color:var(--text-muted); margin-top:4px; text-transform:uppercase; letter-spacing:.04em; }
+
+    .user-row  { display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:8px; }
+    .user-row:hover { border-color:var(--gold); }
+    .user-info { flex:1; min-width:0; }
+    .user-name { font-weight:700; font-size:.9rem; }
+    .user-meta { font-size:.75rem; color:var(--text-muted); margin-top:2px; }
+    .role-badge { font-size:.65rem; padding:2px 8px; border-radius:99px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+    .role-admin { background:rgba(212,175,55,.2); color:var(--gold); border:1px solid var(--gold); }
+    .role-mod   { background:rgba(124,92,191,.2); color:#9b7ee0; border:1px solid #9b7ee0; }
+    .role-user  { background:var(--bg-raised); color:var(--text-muted); border:1px solid var(--border); }
+    .banned-badge { font-size:.65rem; padding:2px 8px; border-radius:99px; font-weight:700; background:rgba(224,92,92,.15); color:#e05c5c; border:1px solid #e05c5c; }
+
+    .flag-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; margin-bottom:12px; }
+    .flag-card.urgent { border-color:#e05c5c; }
+    .flag-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .flag-count  { background:#e05c5c; color:#fff; border-radius:99px; font-size:.72rem; font-weight:800; padding:2px 8px; }
+    .flag-review { background:var(--bg-raised); border-radius:var(--radius-sm); padding:10px 12px; font-size:.82rem; margin:10px 0; font-style:italic; color:var(--text-muted); border-left:3px solid var(--border); }
+    .flag-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+
+    .search-bar { display:flex; gap:8px; margin-bottom:20px; }
+    .search-bar input { flex:1; }
+
+    #accessDenied { text-align:center; padding:80px 20px; }
+    #accessDenied .big-icon { font-size:3rem; margin-bottom:16px; }
+
+    .action-btn { padding:6px 14px; border-radius:var(--radius-sm); font-size:.8rem; font-weight:600; cursor:pointer; border:none; transition:var(--transition); }
+    .btn-ban    { background:rgba(224,92,92,.15); color:#e05c5c; border:1px solid #e05c5c; }
+    .btn-ban:hover { background:#e05c5c; color:#fff; }
+    .btn-unban  { background:rgba(64,190,120,.15); color:#40be78; border:1px solid #40be78; }
+    .btn-unban:hover { background:#40be78; color:#fff; }
+    .btn-remove { background:rgba(224,92,92,.15); color:#e05c5c; border:1px solid #e05c5c; }
+    .btn-remove:hover { background:#e05c5c; color:#fff; }
+    .btn-dismiss { background:var(--bg-raised); color:var(--text-muted); border:1px solid var(--border); }
+    .btn-dismiss:hover { background:var(--border); color:var(--text); }
+
+    .role-select { font-size:.78rem; padding:4px 8px; border-radius:var(--radius-sm); background:var(--bg-raised); color:var(--text); border:1px solid var(--border); cursor:pointer; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="ratings.html">Ratings</a></li>
+      <li><a href="admin.html" class="active">Admin</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"></div>
+  </div>
+</nav>
+
+<!-- Access denied state -->
+<div id="accessDenied" style="display:none">
+  <div class="big-icon">🚫</div>
+  <h2 class="h3" style="margin-bottom:8px">Access Denied</h2>
+  <p class="text-muted" style="font-size:.9rem">You need moderator or admin privileges to view this page.</p>
+  <a href="index.html" class="btn btn--gold" style="margin-top:16px;display:inline-flex">Back to Explore</a>
+</div>
+
+<!-- Admin panel (shown only to mods/admins) -->
+<div id="adminPanel" style="display:none">
+
+  <!-- Hero -->
+  <section style="background:var(--bg-card);border-bottom:1px solid var(--border);padding:40px 0 28px">
+    <div class="container">
+      <div class="hero__eyebrow">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+        Moderation Panel
+      </div>
+      <h1 class="hero__title" style="font-size:clamp(1.6rem,3vw,2.2rem);margin-bottom:4px">Admin Dashboard</h1>
+      <p class="hero__sub" style="font-size:.875rem" id="adminWelcome"></p>
+    </div>
+  </section>
+
+  <div class="container" style="padding-top:32px;padding-bottom:80px">
+
+    <!-- Stats -->
+    <div class="stat-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-num">—</div><div class="stat-lbl">Total Users</div></div>
+      <div class="stat-card"><div class="stat-num">—</div><div class="stat-lbl">Banned</div></div>
+      <div class="stat-card"><div class="stat-num">—</div><div class="stat-lbl">Reviews</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#e05c5c">—</div><div class="stat-lbl">Flagged</div></div>
+      <div class="stat-card"><div class="stat-num">—</div><div class="stat-lbl">Albums</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-tabs">
+      <div class="admin-tab active" onclick="switchTab('flags', this)">🚩 Flagged Reviews</div>
+      <div class="admin-tab" onclick="switchTab('users', this)">👥 Users</div>
+    </div>
+
+    <!-- Flagged Reviews tab -->
+    <div id="tab-flags">
+      <div id="flagsList"></div>
+    </div>
+
+    <!-- Users tab -->
+    <div id="tab-users" style="display:none">
+      <div class="search-bar">
+        <input type="text" id="userSearchInput" placeholder="Search by username…" oninput="debounceUserSearch()" style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:.9rem;width:100%">
+      </div>
+      <div id="usersList"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let _currentRole = null;
+let _debounceTimer = null;
+
+async function initPage() {
+  const user = auth.getUser();
+  if (!user) { showDenied(); return; }
+
+  // Fetch fresh role from server
+  try {
+    const me = await api.get('/api/auth/me');
+    _currentRole = me.role || 'user';
+  } catch {
+    showDenied(); return;
+  }
+
+  if (_currentRole !== 'mod' && _currentRole !== 'admin') { showDenied(); return; }
+
+  document.getElementById('accessDenied').style.display = 'none';
+  document.getElementById('adminPanel').style.display   = 'block';
+  document.getElementById('adminWelcome').textContent   = `Signed in as @${user.username} · ${_currentRole === 'admin' ? '⭐ Admin' : '🛡️ Moderator'}`;
+
+  // Hide role-assignment controls for mods (admin only)
+  if (_currentRole !== 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+  }
+
+  loadStats();
+  loadFlags();
+}
+
+function showDenied() {
+  document.getElementById('accessDenied').style.display = 'block';
+  document.getElementById('adminPanel').style.display   = 'none';
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-flags').style.display = name === 'flags' ? '' : 'none';
+  document.getElementById('tab-users').style.display = name === 'users' ? '' : 'none';
+  if (name === 'users' && !document.getElementById('usersList').children.length) loadUsers('');
+}
+
+// ── Stats ────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await api.get('/api/admin/stats');
+    const grid = document.getElementById('statsGrid');
+    grid.innerHTML = `
+      <div class="stat-card"><div class="stat-num">${s.totalUsers}</div><div class="stat-lbl">Total Users</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#e05c5c">${s.bannedUsers}</div><div class="stat-lbl">Banned</div></div>
+      <div class="stat-card"><div class="stat-num">${s.totalReviews}</div><div class="stat-lbl">Reviews</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#e05c5c">${s.flaggedReviews}</div><div class="stat-lbl">Flagged</div></div>
+      <div class="stat-card"><div class="stat-num">${s.totalAlbums}</div><div class="stat-lbl">Albums</div></div>
+    `;
+  } catch {}
+}
+
+// ── Flagged Reviews ──────────────────────────────────────────
+async function loadFlags() {
+  const el = document.getElementById('flagsList');
+  el.innerHTML = '<div class="text-muted" style="padding:20px 0;font-size:.875rem">Loading flagged reviews…</div>';
+  try {
+    const flags = await api.get('/api/admin/flags?limit=100');
+    if (!flags.length) {
+      el.innerHTML = `
+        <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+          <div style="font-size:2.5rem;margin-bottom:12px">✅</div>
+          <div style="font-size:.9rem">No flagged reviews right now. The community is behaving.</div>
+        </div>`;
+      return;
+    }
+    el.innerHTML = flags.map(f => flagCardHtml(f)).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="text-muted" style="padding:20px 0">Failed to load flags: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function flagCardHtml(f) {
+  const stars  = starsHtml(f.rating, 13);
+  const date   = new Date(f.review_date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  const isUrgent = f.total_flags >= 3;
+  return `
+    <div class="flag-card ${isUrgent ? 'urgent' : ''}" id="flag-${f.review_id}">
+      <div class="flag-header">
+        <img src="${escHtml(f.artwork_url)}" alt="" style="width:44px;height:44px;border-radius:var(--radius-sm);object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.album_title)}</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">${escHtml(f.artist)}</div>
+        </div>
+        <span class="flag-count" title="${f.total_flags} report(s)">🚩 ${f.total_flags}</span>
+      </div>
+
+      <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:6px">
+        Review by <strong style="color:var(--text)">@${escHtml(f.author_username)}</strong>
+        · <span style="display:inline-flex;gap:2px;vertical-align:middle">${stars}</span>
+        · ${date}
+      </div>
+
+      ${f.review_text ? `<div class="flag-review">${escHtml(f.review_text.slice(0, 300))}${f.review_text.length > 300 ? '…' : ''}</div>` : '<div class="flag-review" style="color:var(--text-muted);font-style:italic">No review text — rating only.</div>'}
+
+      ${f.flag_reason ? `<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Reported reason: <em>"${escHtml(f.flag_reason)}"</em></div>` : ''}
+
+      <div class="flag-actions">
+        <button class="action-btn btn-dismiss" onclick="dismissFlag(${f.review_id}, this)">✓ Dismiss Flag</button>
+        <a href="profile.html?u=${encodeURIComponent(f.author_username)}" class="action-btn" style="background:var(--bg-raised);color:var(--text-muted);border:1px solid var(--border);text-decoration:none">View Profile</a>
+        <button class="action-btn btn-ban" onclick="quickBan(${f.author_id}, '${escHtml(f.author_username)}', this)">🚫 Ban User</button>
+        <button class="action-btn btn-remove" onclick="removeReview(${f.review_id}, this)">🗑️ Remove Review</button>
+      </div>
+    </div>`;
+}
+
+async function dismissFlag(reviewId, btn) {
+  btn.disabled = true; btn.textContent = 'Dismissing…';
+  try {
+    await api.post(`/api/admin/flags/${reviewId}/dismiss`, {});
+    document.getElementById(`flag-${reviewId}`)?.remove();
+    loadStats();
+    toast('Flag dismissed — review kept.');
+  } catch (e) { toast('Error: ' + e.message, true); btn.disabled = false; btn.textContent = '✓ Dismiss Flag'; }
+}
+
+async function removeReview(reviewId, btn) {
+  if (!confirm('Permanently remove this review? This cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Removing…';
+  try {
+    await api.delete(`/api/admin/reviews/${reviewId}`);
+    document.getElementById(`flag-${reviewId}`)?.remove();
+    loadStats();
+    toast('Review removed.');
+  } catch (e) { toast('Error: ' + e.message, true); btn.disabled = false; btn.textContent = '🗑️ Remove Review'; }
+}
+
+async function quickBan(userId, username, btn) {
+  const reason = prompt(`Reason for banning @${username} (shown to the user):`);
+  if (reason === null) return; // cancelled
+  btn.disabled = true; btn.textContent = 'Banning…';
+  try {
+    await api.post('/api/admin/ban', { userId, reason });
+    toast(`@${username} has been banned.`);
+    btn.textContent = '✓ Banned'; btn.classList.remove('btn-ban'); btn.classList.add('btn-unban');
+    btn.onclick = () => unbanUser(userId, username, btn);
+    btn.disabled = false;
+    loadStats();
+  } catch (e) { toast('Error: ' + e.message, true); btn.disabled = false; btn.textContent = '🚫 Ban User'; }
+}
+
+// ── Users ────────────────────────────────────────────────────
+function debounceUserSearch() {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(() => {
+    loadUsers(document.getElementById('userSearchInput').value);
+  }, 300);
+}
+
+async function loadUsers(q) {
+  const el = document.getElementById('usersList');
+  el.innerHTML = '<div class="text-muted" style="padding:16px 0;font-size:.875rem">Loading users…</div>';
+  try {
+    const users = await api.get(`/api/admin/users?q=${encodeURIComponent(q || '')}&limit=100`);
+    if (!users.length) {
+      el.innerHTML = '<div class="text-muted" style="padding:16px 0;font-size:.875rem">No users found.</div>';
+      return;
+    }
+    el.innerHTML = users.map(u => userRowHtml(u)).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="text-muted">Failed to load users: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function userRowHtml(u) {
+  const joined  = new Date(u.created_at).toLocaleDateString('en-US', { month:'short', year:'numeric' });
+  const roleBadge = `<span class="role-badge role-${u.role}">${u.role}</span>`;
+  const bannedBadge = u.banned ? `<span class="banned-badge">BANNED${u.ban_reason ? ': ' + escHtml(u.ban_reason.slice(0,40)) : ''}</span>` : '';
+
+  const banBtn = u.banned
+    ? `<button class="action-btn btn-unban" onclick="unbanUser(${u.id},'${escHtml(u.username)}',this)">✓ Unban</button>`
+    : `<button class="action-btn btn-ban" onclick="banUser(${u.id},'${escHtml(u.username)}',this)">🚫 Ban</button>`;
+
+  const roleSelect = _currentRole === 'admin' ? `
+    <select class="role-select admin-only" onchange="setRole(${u.id},'${escHtml(u.username)}',this.value,this)" title="Change role">
+      <option value="user"  ${u.role==='user'  ? 'selected':''}>User</option>
+      <option value="mod"   ${u.role==='mod'   ? 'selected':''}>Mod</option>
+      <option value="admin" ${u.role==='admin' ? 'selected':''}>Admin</option>
+    </select>` : '';
+
+  return `
+    <div class="user-row" id="urow-${u.id}">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--bg-raised);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0">${escHtml((u.username||'?').slice(0,2).toUpperCase())}</div>
+      <div class="user-info">
+        <div class="user-name">@${escHtml(u.username)} ${roleBadge} ${bannedBadge}</div>
+        <div class="user-meta">${escHtml(u.email)} · ${u.review_count} review${u.review_count!==1?'s':''} · joined ${joined}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${roleSelect}
+        <a href="profile.html?u=${encodeURIComponent(u.username)}" class="action-btn" style="background:var(--bg-raised);color:var(--text-muted);border:1px solid var(--border);text-decoration:none">Profile</a>
+        ${banBtn}
+      </div>
+    </div>`;
+}
+
+async function banUser(userId, username, btn) {
+  const reason = prompt(`Reason for banning @${username} (shown to the user — leave blank for generic message):`);
+  if (reason === null) return;
+  btn.disabled = true; btn.textContent = 'Banning…';
+  try {
+    await api.post('/api/admin/ban', { userId, reason });
+    toast(`@${username} has been banned.`);
+    // Refresh the row
+    const users = await api.get(`/api/admin/users?q=${username}&limit=1`);
+    if (users[0]) document.getElementById(`urow-${userId}`)?.outerHTML && (document.getElementById(`urow-${userId}`).outerHTML = userRowHtml(users[0]));
+    loadStats();
+  } catch (e) { toast('Error: ' + e.message, true); btn.disabled = false; btn.textContent = '🚫 Ban'; }
+}
+
+async function unbanUser(userId, username, btn) {
+  btn.disabled = true; btn.textContent = 'Unbanning…';
+  try {
+    await api.post('/api/admin/unban', { userId });
+    toast(`@${username} has been unbanned.`);
+    const users = await api.get(`/api/admin/users?q=${username}&limit=1`);
+    if (users[0]) document.getElementById(`urow-${userId}`)?.outerHTML && (document.getElementById(`urow-${userId}`).outerHTML = userRowHtml(users[0]));
+    loadStats();
+  } catch (e) { toast('Error: ' + e.message, true); btn.disabled = false; btn.textContent = '✓ Unban'; }
+}
+
+async function setRole(userId, username, role, select) {
+  select.disabled = true;
+  try {
+    await api.post('/api/admin/set-role', { userId, role });
+    toast(`@${username} is now a ${role}.`);
+    loadStats();
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  } finally {
+    select.disabled = false;
+  }
+}
+
+// ── Toast helper ─────────────────────────────────────────────
+function toast(msg, isError = false) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${isError ? '#e05c5c' : 'var(--gold)'};color:${isError ? '#fff' : '#000'};padding:12px 20px;border-radius:var(--radius-md);font-size:.875rem;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);transition:opacity .3s`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+</script>
+</body>
+</html>
