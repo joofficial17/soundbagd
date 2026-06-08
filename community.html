@@ -139,81 +139,82 @@ function skeletonCard() {
 
 async function loadUsers(q) {
   const grid = document.getElementById('userGrid');
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('resultsLabel').textContent = q ? `Results for "${q}"` : 'All Members';
-  document.getElementById('resultsCount').textContent = '';
+  const empty = document.getElementById('emptyState');
+  const label = document.getElementById('resultsLabel');
+  const count = document.getElementById('resultsCount');
 
-  // Show skeletons inline in the grid
+  empty.style.display = 'none';
+  label.textContent = q ? 'Results for "' + q + '"' : 'All Members';
+  count.textContent = '';
   grid.innerHTML = Array.from({length: 8}, skeletonCard).join('');
 
   try {
-    const params = new URLSearchParams({ q, limit: 50 });
-    if (_currentUser) params.set('viewer', _currentUser.id);
-    const users = await api.get('/api/users/search?' + params.toString());
+    const url = '/api/users/search?q=' + encodeURIComponent(q || '') + '&limit=50' +
+                (_currentUser ? '&viewer=' + _currentUser.id : '');
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+    const users = await resp.json();
 
-    if (!users.length) {
+    if (!Array.isArray(users) || !users.length) {
       grid.innerHTML = '';
-      document.getElementById('emptyState').style.display = '';
+      empty.style.display = '';
       return;
     }
 
-    document.getElementById('resultsCount').textContent = `${users.length} member${users.length !== 1 ? 's' : ''}`;
-    grid.innerHTML = users.map(u => userCardHtml(u)).join('');
+    count.textContent = users.length + ' member' + (users.length !== 1 ? 's' : '');
+    grid.innerHTML = '';
+    users.forEach(function(u) {
+      try {
+        const card = document.createElement('div');
+        card.innerHTML = userCardHtml(u);
+        grid.appendChild(card.firstElementChild);
+      } catch (cardErr) {
+        console.error('Card error for', u.username, cardErr);
+      }
+    });
   } catch (err) {
-    grid.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load members — ${err.message}</div>`;
+    console.error('loadUsers error:', err);
+    grid.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load members — ' + err.message + '</div>';
   }
 }
 
 function userCardHtml(u) {
-  const isMe = _currentUser && _currentUser.username === u.username;
+  const isMe     = _currentUser && _currentUser.username === u.username;
   const joinDate = new Date(u.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const initials = (u.initials || u.username.slice(0, 2)).toUpperCase();
+  const gradient = u.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)';
+  const profileUrl = 'profile.html?u=' + encodeURIComponent(u.username);
 
-  return `
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;display:flex;flex-direction:column;gap:14px;transition:var(--transition)"
-      onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+  // Build follow button HTML safely
+  var followBtn = '';
+  if (!isMe && _currentUser) {
+    var btnClass = u.isFollowing ? 'btn btn--gold btn--sm' : 'btn btn--ghost btn--sm';
+    var btnLabel = u.isFollowing ? '&#10003; Following' : '+ Follow';
+    followBtn = '<button class="' + btnClass + '" id="follow-btn-' + u.id + '" style="flex:1" onclick="toggleFollowCard(' + u.id + ',\'' + u.username.replace(/'/g,"\\'") + '\',this)">' + btnLabel + '</button>';
+  } else if (!_currentUser) {
+    followBtn = '<button class="btn btn--ghost btn--sm" style="flex:1" onclick="openAuthModal(\'login\')">Follow</button>';
+  }
 
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.href='profile.html?u=${encodeURIComponent(u.username)}'">
-        <div style="width:48px;height:48px;border-radius:50%;background:${u.avatar_gradient || 'var(--bg-raised)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#fff;flex-shrink:0">
-          ${escHtml(u.initials || u.username.slice(0,2).toUpperCase())}
-        </div>
-        <div style="min-width:0">
-          <div style="font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@${escHtml(u.username)}</div>
-          <div class="text-xs muted">Joined ${joinDate}</div>
-        </div>
-      </div>
+  var bioHtml = u.bio ? '<div style="font-size:.8rem;color:var(--text-muted);font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml('"' + u.bio + '"') + '</div>' : '';
 
-      <!-- Stats row -->
-      <div style="display:flex;gap:20px">
-        <div style="text-align:center">
-          <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${u.review_count || 0}</div>
-          <div class="text-xs muted">Reviews</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${u.follower_count || 0}</div>
-          <div class="text-xs muted">Followers</div>
-        </div>
-        ${u.bio ? `<div style="font-size:.8rem;color:var(--text-muted);font-style:italic;align-self:center;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${escHtml(u.bio)}"</div>` : ''}
-      </div>
-
-      <!-- Action buttons -->
-      <div style="display:flex;gap:8px">
-        <button class="btn btn--ghost btn--sm" style="flex:1" onclick="location.href='profile.html?u=${encodeURIComponent(u.username)}'">
-          View Profile
-        </button>
-        ${!isMe && _currentUser ? `
-          <button class="btn btn--sm ${u.isFollowing ? 'btn--gold' : 'btn--ghost'}"
-            id="follow-btn-${u.id}"
-            onclick="toggleFollowCard(${u.id}, '${escHtml(u.username)}', this)"
-            style="flex:1">
-            ${u.isFollowing ? '✓ Following' : '+ Follow'}
-          </button>` : ''}
-        ${!_currentUser ? `
-          <button class="btn btn--ghost btn--sm" style="flex:1" onclick="openAuthModal('login')">
-            Follow
-          </button>` : ''}
-      </div>
-    </div>`;
+  return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;display:flex;flex-direction:column;gap:14px;cursor:pointer" onclick="location.href=\'' + profileUrl + '\'">'
+    + '<div style="display:flex;align-items:center;gap:12px">'
+    +   '<div style="width:48px;height:48px;border-radius:50%;background:' + gradient + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#fff;flex-shrink:0">' + escHtml(initials) + '</div>'
+    +   '<div style="min-width:0">'
+    +     '<div style="font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@' + escHtml(u.username) + '</div>'
+    +     '<div style="font-size:.75rem;color:var(--text-muted)">Joined ' + joinDate + '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:20px;align-items:center">'
+    +   '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--gold)">' + (u.review_count || 0) + '</div><div style="font-size:.72rem;color:var(--text-muted)">Reviews</div></div>'
+    +   '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--gold)">' + (u.follower_count || 0) + '</div><div style="font-size:.72rem;color:var(--text-muted)">Followers</div></div>'
+    +   bioHtml
+    + '</div>'
+    + '<div style="display:flex;gap:8px" onclick="event.stopPropagation()">'
+    +   '<a href="' + profileUrl + '" class="btn btn--ghost btn--sm" style="flex:1;justify-content:center">View Profile</a>'
+    +   followBtn
+    + '</div>'
+    + '</div>';
 }
 
 async function toggleFollowCard(userId, username, btn) {
