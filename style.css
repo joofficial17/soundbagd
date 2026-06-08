@@ -998,39 +998,61 @@ body.mobile-view { overflow-x: hidden; width: 100%; }
     padding-top: 20px;
     margin-top: 4px;
   }
-  /* "Most Streamed Today" — horizontal scroll card strip */
+  /* ── "Most Streamed Today" — horizontal swipe strip ── */
   body:not(.force-desktop) #popularList {
     display: flex !important;
     flex-direction: row !important;
-    gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 10px;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    overflow-y: visible;
+    padding-bottom: 8px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding-left: 4px;
-    padding-right: 4px;
   }
   body:not(.force-desktop) #popularList::-webkit-scrollbar { display: none; }
+  /* Each album card — column layout, no list styling */
   body:not(.force-desktop) #popularList .top5-item {
-    flex: 0 0 auto;
+    display: flex !important;
+    flex: 0 0 100px !important;
     flex-direction: column !important;
     align-items: flex-start !important;
-    width: 110px;
+    gap: 5px !important;
+    width: 100px !important;
     padding: 0 !important;
-    background: none;
-    cursor: pointer;
+    background: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
   }
-  body:not(.force-desktop) #popularList .top5-item__num { display: none; }
+  body:not(.force-desktop) #popularList .top5-item:hover {
+    background: none !important;
+    border-color: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  body:not(.force-desktop) #popularList .top5-item__num { display: none !important; }
   body:not(.force-desktop) #popularList .top5-item__art {
-    width: 110px !important;
-    height: 110px !important;
-    border-radius: var(--radius-md);
-    margin-bottom: 6px;
+    width: 100px !important;
+    height: 100px !important;
+    border-radius: var(--radius-md) !important;
     flex-shrink: 0;
   }
-  body:not(.force-desktop) #popularList .top5-item__info { width: 100%; }
-  body:not(.force-desktop) #popularList .top5-item__title { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body:not(.force-desktop) #popularList .top5-item__sub  { font-size: .65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body:not(.force-desktop) #popularList .top5-item__info { width: 100px; padding: 0 2px; }
+  body:not(.force-desktop) #popularList .top5-item__title { font-size: .72rem; }
+  body:not(.force-desktop) #popularList .top5-item__sub  { font-size: .65rem; }
+
+  /* ── Review cards — fit to viewport, no overflow ── */
+  body:not(.force-desktop) .review-card {
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  body:not(.force-desktop) .review-card__user {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  body:not(.force-desktop) .review-card__date { display: none; }
+  body:not(.force-desktop) .review-card__text { -webkit-line-clamp: 3; }
 
   /* Hide import box on mobile — accessible from hamburger menu */
   body:not(.force-desktop) .sidebar-import-box { display: none !important; }
@@ -1094,8 +1116,11 @@ body.mobile-view .album-header__actions { justify-content: center; }
 body.mobile-view .track-item { padding: 10px 14px; gap: 10px; }
 body.mobile-view .profile-header__inner { flex-direction: column; align-items: flex-start; gap: 16px; }
 body.mobile-view .stats-row { gap: 16px; }
-body.mobile-view .review-card { padding: 14px; }
+body.mobile-view .review-card { padding: 14px; width: 100%; box-sizing: border-box; overflow: hidden; }
 body.mobile-view .review-card__album-art { width: 48px; height: 48px; }
+body.mobile-view .review-card__user { flex-wrap: wrap; row-gap: 4px; }
+body.mobile-view .review-card__date { display: none; }
+body.mobile-view .review-card__text { -webkit-line-clamp: 3; }
 body.mobile-view .modal-backdrop { align-items: flex-end; padding: 0; }
 body.mobile-view .modal { max-width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 24px 20px 36px; transform: translateY(100%); }
 body.mobile-view .modal-backdrop.open .modal { transform: translateY(0); }
@@ -1103,14 +1128,15 @@ body.mobile-view .section { padding: 32px 0; }
 body.mobile-view .section__header { flex-direction: column; gap: 8px; }
 body.mobile-view .main-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
 body.mobile-view .main-grid aside { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 4px; }
-body.mobile-view #popularList { display: flex !important; flex-direction: row !important; gap: 10px; overflow-x: auto; padding-bottom: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+body.mobile-view #popularList { display: flex !important; flex-direction: row !important; gap: 12px !important; overflow-x: auto !important; overflow-y: visible; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 body.mobile-view #popularList::-webkit-scrollbar { display: none; }
-body.mobile-view #popularList .top5-item { flex: 0 0 auto; flex-direction: column !important; align-items: flex-start !important; width: 110px; padding: 0 !important; background: none; cursor: pointer; }
-body.mobile-view #popularList .top5-item__num { display: none; }
-body.mobile-view #popularList .top5-item__art { width: 110px !important; height: 110px !important; border-radius: var(--radius-md); margin-bottom: 6px; flex-shrink: 0; }
-body.mobile-view #popularList .top5-item__info { width: 100%; }
-body.mobile-view #popularList .top5-item__title { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-body.mobile-view #popularList .top5-item__sub  { font-size: .65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mobile-view #popularList .top5-item { display: flex !important; flex: 0 0 100px !important; flex-direction: column !important; align-items: flex-start !important; gap: 5px !important; width: 100px !important; padding: 0 !important; background: none !important; border: none !important; border-radius: 0 !important; transform: none !important; }
+body.mobile-view #popularList .top5-item:hover { background: none !important; border-color: transparent !important; transform: none !important; box-shadow: none !important; }
+body.mobile-view #popularList .top5-item__num { display: none !important; }
+body.mobile-view #popularList .top5-item__art { width: 100px !important; height: 100px !important; border-radius: var(--radius-md) !important; flex-shrink: 0; }
+body.mobile-view #popularList .top5-item__info { width: 100px; padding: 0 2px; }
+body.mobile-view #popularList .top5-item__title { font-size: .72rem; }
+body.mobile-view #popularList .top5-item__sub  { font-size: .65rem; }
 body.mobile-view .sidebar-import-box { display: none !important; }
 body.mobile-view .trending-strip { grid-template-rows: repeat(2, auto); grid-auto-columns: 130px; gap: 10px; }
 body.mobile-view .hero { padding: 28px 0 20px; }
