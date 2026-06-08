@@ -10,15 +10,16 @@
 
 'use strict';
 
-const express   = require('express');
-const cors      = require('cors');
-const path      = require('path');
-const bcrypt    = require('bcryptjs');
-const jwt       = require('jsonwebtoken');
-const Database  = require('better-sqlite3');
-const fetch     = require('node-fetch');
-const helmet    = require('helmet');
-const rateLimit = require('express-rate-limit');
+const express      = require('express');
+const cors         = require('cors');
+const path         = require('path');
+const bcrypt       = require('bcryptjs');
+const jwt          = require('jsonwebtoken');
+const Database     = require('better-sqlite3');
+const fetch        = require('node-fetch');
+const helmet       = require('helmet');
+const rateLimit    = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -58,9 +59,27 @@ app.use(cors({
   credentials: true,
 }));
 
-// ── Body size limit ────────────────────────────────────────
+// ── Body + Cookie parsing ──────────────────────────────────
 app.use(express.json({ limit: '64kb' }));   // prevent body-bomb attacks
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname)));   // serve HTML/CSS/JS
+
+// ── CSRF protection ────────────────────────────────────────
+// State-changing requests must include the X-Requested-With header.
+// Browsers never send this automatically cross-origin, so it proves
+// the request came from our own JS (not a form POST from another site).
+// GET/HEAD/OPTIONS are safe methods — no check needed.
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+app.use((req, res, next) => {
+  if (SAFE_METHODS.has(req.method)) return next();
+  // Allow requests that arrive with a Bearer token (API clients / mobile)
+  if ((req.headers.authorization || '').startsWith('Bearer ')) return next();
+  // Cookie-based sessions must present the custom header
+  if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+    return res.status(403).json({ error: 'CSRF check failed' });
+  }
+  next();
+});
 
 // ── Rate Limiters ──────────────────────────────────────────
 // Auth endpoints: 10 attempts per 15 minutes per IP
@@ -472,8 +491,22 @@ function formatAlbum(item) {
 }
 
 // ── Auth Middleware ────────────────────────────────────────
+// Cookie options — HttpOnly prevents JS access, Secure=true in prod
+const AUTH_COOKIE_OPTS = {
+  httpOnly: true,
+  secure:   IS_PROD,
+  sameSite: 'Strict',
+  maxAge:   30 * 24 * 60 * 60 * 1000, // 30 days in ms
+  path:     '/',
+};
+
+function setAuthCookie(res, token) {
+  res.cookie('sb_token', token, AUTH_COOKIE_OPTS);
+}
+
 function auth(req, res, next) {
-  const token = (req.headers.authorization || '').split(' ')[1];
+  // Accept token from HttpOnly cookie (preferred) or Authorization header (API clients)
+  const token = req.cookies?.sb_token || (req.headers.authorization || '').split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
     req.user = jwt.verify(token, _JWT_SECRET);
@@ -542,7 +575,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     ).run(username, email, hash, initials, gradient);
 
     const token = jwt.sign({ id: result.lastInsertRowid, username, role: 'user' }, _JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: result.lastInsertRowid, username, email, initials, gradient, role: 'user' } });
+    setAuthCookie(res, token);
+    res.json({ user: { id: result.lastInsertRowid, username, email, initials, gradient, role: 'user' } });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
       if (err.message.includes('username')) return res.status(409).json({ error: 'That username is already taken' });
@@ -571,10 +605,16 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (user.banned) return res.status(403).json({ error: `Your account has been suspended${user.ban_reason ? ': ' + user.ban_reason : '.'}`, banned: true });
 
   const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'user' }, _JWT_SECRET, { expiresIn: '30d' });
+  setAuthCookie(res, token);
   res.json({
-    token,
     user: { id: user.id, username: user.username, email: user.email, initials: user.initials, gradient: user.avatar_gradient, bio: user.bio, role: user.role || 'user' },
   });
+});
+
+// POST /api/auth/logout — clear the auth cookie
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('sb_token', { path: '/' });
+  res.json({ success: true });
 });
 
 // GET /api/auth/me
@@ -1985,7 +2025,8 @@ app.delete('/api/admin/reviews/:id', auth, requireMod, (req, res) => {
 
 // GET /api/admin/flags?limit=50  — get flagged reviews with context (mod+)
 app.get('/api/admin/flags', auth, requireMod, (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const limit  = Math.min(Number(req.query.limit)  || 21, 50);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
   const flags = db.prepare(`
     SELECT
       rf.id AS flag_id,
@@ -2005,8 +2046,8 @@ app.get('/api/admin/flags', auth, requireMod, (req, res) => {
     JOIN albums a        ON a.id = r.album_id
     GROUP BY rf.review_id
     ORDER BY total_flags DESC, rf.created_at DESC
-    LIMIT ?
-  `).all(limit);
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
   res.json(flags);
 });
 

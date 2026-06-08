@@ -197,12 +197,20 @@ async function loadStats() {
 }
 
 // ── Flagged Reviews ──────────────────────────────────────────
-async function loadFlags() {
+let _flagsPage = 0;
+const FLAGS_PER_PAGE = 20;
+
+async function loadFlags(page = 0) {
+  _flagsPage = page;
   const el = document.getElementById('flagsList');
   el.innerHTML = '<div class="text-muted" style="padding:20px 0;font-size:.875rem">Loading flagged reviews…</div>';
   try {
-    const flags = await api.get('/api/admin/flags?limit=100');
-    if (!flags.length) {
+    const offset = page * FLAGS_PER_PAGE;
+    const flags = await api.get(`/api/admin/flags?limit=${FLAGS_PER_PAGE + 1}&offset=${offset}`);
+    const hasMore = flags.length > FLAGS_PER_PAGE;
+    const pageFlags = flags.slice(0, FLAGS_PER_PAGE);
+
+    if (!pageFlags.length && page === 0) {
       el.innerHTML = `
         <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
           <div style="font-size:2.5rem;margin-bottom:12px">✅</div>
@@ -210,7 +218,15 @@ async function loadFlags() {
         </div>`;
       return;
     }
-    el.innerHTML = flags.map(f => flagCardHtml(f)).join('');
+
+    const pagerHtml = `
+      <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn btn--ghost btn--sm" onclick="loadFlags(${page - 1})" ${page === 0 ? 'disabled' : ''}>← Prev</button>
+        <span style="font-size:.8rem;color:var(--text-muted)">Page ${page + 1}</span>
+        <button class="btn btn--ghost btn--sm" onclick="loadFlags(${page + 1})" ${!hasMore ? 'disabled' : ''}>Next →</button>
+      </div>`;
+
+    el.innerHTML = pageFlags.map(f => flagCardHtml(f)).join('') + (pageFlags.length ? pagerHtml : '');
   } catch (e) {
     el.innerHTML = `<div class="text-muted" style="padding:20px 0">Failed to load flags: ${escHtml(e.message)}</div>`;
   }

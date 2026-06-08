@@ -206,7 +206,7 @@ function renderRatingList(id, reviews, tone) {
   }
 
   el.innerHTML = reviews.map(r => {
-    const stars  = starsHtml(r.rating, 13);
+    const stars  = starsHtml(r.rating, 14);
     const date   = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const typeTag = r.media_type && r.media_type.toLowerCase() !== 'album'
       ? `<span class="tag" style="font-size:.6rem;padding:2px 6px;vertical-align:middle">${escHtml(r.media_type)}</span>` : '';

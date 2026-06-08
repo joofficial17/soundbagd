@@ -449,7 +449,7 @@ async function loadProfileReviews(username) {
           <div class="review-card__info">
             <div class="review-card__title" style="cursor:pointer" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">${escHtml(r.title)}</div>
             <div class="review-card__artist">${escHtml(r.artist)} · ${escHtml(r.media_type || 'Album')}</div>
-            <div style="display:flex;align-items:center;gap:4px">${starsHtml(r.rating, 13)}<span style="font-size:.75rem;color:var(--gold);font-weight:600;margin-left:4px">${r.rating}</span></div>
+            <div style="display:flex;align-items:center;gap:4px">${starsHtml(r.rating, 14)}<span style="font-size:.75rem;color:var(--gold);font-weight:600;margin-left:4px">${r.rating}</span></div>
           </div>
           <div class="text-xs muted" style="flex-shrink:0">${relativeTime(r.created_at)}</div>
         </div>
@@ -482,7 +482,7 @@ async function loadProfileReviews(username) {
             <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(r.title)}</div>
             <div class="text-xs muted">${escHtml(r.artist)}</div>
           </div>
-          <div class="rating-badge" style="font-size:.72rem;flex-shrink:0">${starsHtml(r.rating, 11)} ${r.rating}</div>
+          <div class="rating-badge" style="font-size:.72rem;flex-shrink:0">${starsHtml(r.rating, 13)} ${r.rating}</div>
         </div>
       </div>`).join('');
   } catch { /* server not running */ }
@@ -561,7 +561,7 @@ async function loadYearStats() {
               <div class="top5-item__title">${escHtml(r.title)}</div>
               <div class="top5-item__sub">${escHtml(r.artist)}</div>
             </div>
-            <div class="rating-badge">${starsHtml(r.rating, 11)} ${r.rating}</div>
+            <div class="rating-badge">${starsHtml(r.rating, 13)} ${r.rating}</div>
           </div>`).join('')}
       </div>` : ''}
     `;

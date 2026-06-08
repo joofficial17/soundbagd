@@ -13,11 +13,14 @@ const api = {
   async request(method, path, body) {
     const opts = {
       method,
+      credentials: 'include',  // send HttpOnly auth cookie automatically
       headers: { 'Content-Type': 'application/json' },
     };
-    const token = auth.getToken();
-    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
-    if (body)  opts.body = JSON.stringify(body);
+    // CSRF header — required by server for all state-changing requests
+    if (method !== 'GET' && method !== 'HEAD') {
+      opts.headers['X-Requested-With'] = 'XMLHttpRequest';
+    }
+    if (body) opts.body = JSON.stringify(body);
 
     const res = await fetch(API_BASE + path, opts);
     const data = await res.json().catch(() => ({}));
@@ -32,19 +35,23 @@ const api = {
 
 // ── Auth ───────────────────────────────────────────────────
 const auth = {
-  getToken:  ()    => localStorage.getItem('sb_token'),
+  // Token is now in an HttpOnly cookie — JS never touches it
+  // We only store non-sensitive user profile info in localStorage
   getUser:   ()    => JSON.parse(localStorage.getItem('sb_user') || 'null'),
-  isLoggedIn:()    => !!auth.getToken(),
+  isLoggedIn:()    => !!auth.getUser(),
 
-  save(token, user) {
-    localStorage.setItem('sb_token', token);
-    localStorage.setItem('sb_user',  JSON.stringify(user));
+  save(user) {
+    // No token stored in JS — cookie is set by the server
+    localStorage.setItem('sb_user', JSON.stringify(user));
     this.updateNav();
   },
 
-  logout() {
-    localStorage.removeItem('sb_token');
+  async logout() {
+    // Tell server to clear the cookie, then wipe local profile cache
+    await api.post('/api/auth/logout', {}).catch(() => {});
     localStorage.removeItem('sb_user');
+    // Clean up old sb_token key if present from a previous session
+    localStorage.removeItem('sb_token');
     this.updateNav();
   },
 
@@ -456,7 +463,7 @@ async function registerUser() {
     const email    = document.getElementById('reg_email').value.trim();
     const password = document.getElementById('reg_password').value;
     const data = await api.post('/api/auth/register', { username, email, password });
-    auth.save(data.token, data.user);
+    auth.save(data.user);
     closeAuthModal();
     // Redirect to profile
     setTimeout(() => { window.location.href = `profile.html?u=${encodeURIComponent(data.user.username)}`; }, 100);
@@ -474,7 +481,7 @@ async function loginUser() {
     const email    = document.getElementById('log_email').value.trim();
     const password = document.getElementById('log_password').value;
     const data = await api.post('/api/auth/login', { email, password });
-    auth.save(data.token, data.user);
+    auth.save(data.user);
     closeAuthModal();
     // Stay on page but refresh if needed
     if (typeof initPage === 'function') initPage();
@@ -486,8 +493,8 @@ async function loginUser() {
   }
 }
 
-function logoutUser() {
-  auth.logout();
+async function logoutUser() {
+  await auth.logout();
   window.location.href = 'index.html';
 }
 

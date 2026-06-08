@@ -565,9 +565,22 @@ async function loadAlbumReviews() {
 
     renderAlbumReviewList(_albumReviews, document.getElementById('reviewSort').value);
 
-    // Update rating card with fresh stats
-    const statsRes = await api.get(`/api/music/album/${encodeURIComponent(_album.itunesId)}`).catch(() => null);
-    if (statsRes?.stats) { _album.stats = statsRes.stats; renderRatingCard(_album); }
+    // Recompute rating stats from the reviews we already have — no extra fetch needed
+    const ratings = _albumReviews.map(r => r.rating);
+    if (ratings.length) {
+      const avg = ratings.reduce((s, r) => s + r, 0) / ratings.length;
+      _album.stats = {
+        total: ratings.length,
+        avg:   Math.round(avg * 100) / 100,
+        r5:    ratings.filter(r => r === 5).length,
+        r4h:   ratings.filter(r => r === 4.5).length,
+        r4:    ratings.filter(r => r === 4).length,
+        r3h:   ratings.filter(r => r === 3.5).length,
+        r3:    ratings.filter(r => r === 3).length,
+        rLow:  ratings.filter(r => r <= 2.5).length,
+      };
+      renderRatingCard(_album);
+    }
   } catch { /* server not running */ }
 }
 
