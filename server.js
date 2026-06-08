@@ -19,7 +19,6 @@ const Database     = require('better-sqlite3');
 const fetch        = require('node-fetch');
 const helmet       = require('helmet');
 const rateLimit    = require('express-rate-limit');
-const cookieParser = require('cookie-parser');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -61,7 +60,21 @@ app.use(cors({
 
 // ── Body + Cookie parsing ──────────────────────────────────
 app.use(express.json({ limit: '64kb' }));   // prevent body-bomb attacks
-app.use(cookieParser());
+// Inline cookie parser — avoids external dependency / lock file issues
+app.use((req, res, next) => {
+  req.cookies = {};
+  const header = req.headers.cookie;
+  if (header) {
+    header.split(';').forEach(pair => {
+      const idx = pair.indexOf('=');
+      if (idx < 0) return;
+      const key = pair.slice(0, idx).trim();
+      const val = pair.slice(idx + 1).trim();
+      try { req.cookies[key] = decodeURIComponent(val); } catch { req.cookies[key] = val; }
+    });
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname)));   // serve HTML/CSS/JS
 
 // ── CSRF protection ────────────────────────────────────────
