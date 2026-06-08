@@ -1325,13 +1325,13 @@ function getViewMode() {
 function applyViewMode(mode) {
   localStorage.setItem('sb_view', mode);
   document.body.classList.remove('mobile-view', 'force-desktop');
+  document.documentElement.classList.remove('mobile-view-html');
   if (mode === 'mobile') {
     document.body.classList.add('mobile-view');
-    // Narrow the viewport so desktop elements collapse naturally too
+    document.documentElement.classList.add('mobile-view-html'); // lets CSS target <html> too
     document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1.0';
   } else if (mode === 'desktop') {
     document.body.classList.add('force-desktop');
-    // Fixed-width viewport lets the desktop layout render on phones
     document.querySelector('meta[name=viewport]').content = 'width=1200, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5';
   } else {
     // auto — let media queries decide
