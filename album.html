@@ -24,8 +24,6 @@
       <li><a href="index.html">Explore</a></li>
       <li><a href="community.html">Community</a></li>
       <li><a href="ratings.html">Ratings</a></li>
-      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
-      <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -185,9 +183,10 @@ function renderAlbumReviewList(reviews, sort) {
             <a href="profile.html?u=${encodeURIComponent(r.username)}" class="review-card__username" style="color:inherit">${escHtml(r.username)}</a>
             <div class="review-card__date">${relativeTime(r.created_at)}</div>
           </div>
-          <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
             ${starsHtml(r.rating, 14)}
             <span style="font-size:.78rem;color:var(--gold);font-weight:600">${r.rating}</span>
+            ${r.last_listened ? `<span style="font-size:.72rem;color:var(--text-muted);width:100%;text-align:right">🎧 Last listened: <strong style="color:var(--text)">${formatLastListened(r.last_listened)}</strong></span>` : ''}
           </div>
         </div>
         ${r.review_text

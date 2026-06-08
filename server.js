@@ -1341,7 +1341,7 @@ app.get('/api/reviews/acclaimed', (req, res) => {
                        "AND LOWER(a.media_type) = 'album'";
 
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags, r.last_listened,
            u.username, u.initials, u.avatar_gradient,
            a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
            (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
@@ -1367,7 +1367,7 @@ app.get('/api/reviews/panned', (req, res) => {
                        "AND LOWER(a.media_type) = 'album'";
 
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags, r.last_listened,
            u.username, u.initials, u.avatar_gradient,
            a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
            (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
