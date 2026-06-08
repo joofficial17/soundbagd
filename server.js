@@ -1531,6 +1531,45 @@ app.delete('/api/users/:username/follow', auth, (req, res) => {
   res.json({ success: true, followerCount: count });
 });
 
+// GET /api/users/:username/followers  — list everyone who follows this user
+app.get('/api/users/:username/followers', (req, res) => {
+  const u = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.initials, u.avatar_gradient,
+           (SELECT COUNT(*) FROM reviews r WHERE r.user_id = u.id) AS review_count
+    FROM follows f JOIN users u ON u.id = f.follower_id
+    WHERE f.following_id = ?
+    ORDER BY f.created_at DESC
+  `).all(u.id);
+  res.json(rows);
+});
+
+// GET /api/users/:username/following  — list everyone this user follows
+app.get('/api/users/:username/following', (req, res) => {
+  const u = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.initials, u.avatar_gradient,
+           (SELECT COUNT(*) FROM reviews r WHERE r.user_id = u.id) AS review_count
+    FROM follows f JOIN users u ON u.id = f.following_id
+    WHERE f.follower_id = ?
+    ORDER BY f.created_at DESC
+  `).all(u.id);
+  res.json(rows);
+});
+
+// DELETE /api/users/:username/followers/:followerUsername  — remove a follower (owner only)
+app.delete('/api/users/:username/followers/:followerUsername', auth, (req, res) => {
+  const owner    = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  const follower = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.followerUsername.toLowerCase());
+  if (!owner || !follower) return res.status(404).json({ error: 'User not found' });
+  if (owner.id !== req.user.id) return res.status(403).json({ error: 'You can only remove followers from your own account' });
+  db.prepare('DELETE FROM follows WHERE follower_id=? AND following_id=?').run(follower.id, owner.id);
+  const count = db.prepare('SELECT COUNT(*) as c FROM follows WHERE following_id=?').get(owner.id).c;
+  res.json({ success: true, followerCount: count });
+});
+
 // ── LIKE ROUTES ────────────────────────────────────────────
 
 // POST /api/reviews/:id/like  (toggle — likes if not liked, unlikes if liked)

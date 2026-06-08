@@ -357,8 +357,14 @@ function renderProfileHeader(u) {
     <div class="stats-row fade-up fade-up-2" style="margin-left:auto;flex-direction:column;align-items:flex-end;gap:12px">
       <div style="display:flex;gap:20px">
         <div class="stat"><div class="stat__value">${u.reviews || 0}</div><div class="stat__label">Reviews</div></div>
-        <div class="stat"><div class="stat__value">${u.followerCount || 0}</div><div class="stat__label">Followers</div></div>
-        <div class="stat"><div class="stat__value">${u.followingCount || 0}</div><div class="stat__label">Following</div></div>
+        <div class="stat" style="cursor:pointer" onclick="openFollowModal('followers','${escHtml(u.username)}')">
+          <div class="stat__value" id="statFollowers">${u.followerCount || 0}</div>
+          <div class="stat__label" style="color:var(--gold);text-decoration:underline;text-underline-offset:3px">Followers</div>
+        </div>
+        <div class="stat" style="cursor:pointer" onclick="openFollowModal('following','${escHtml(u.username)}')">
+          <div class="stat__value" id="statFollowing">${u.followingCount || 0}</div>
+          <div class="stat__label" style="color:var(--gold);text-decoration:underline;text-underline-offset:3px">Following</div>
+        </div>
         <div class="stat"><div class="stat__value">${u.avg_rating ? Number(u.avg_rating).toFixed(1) : '—'}</div><div class="stat__label">Avg Rating</div></div>
       </div>
       <div class="text-xs muted">Member since ${new Date(u.created_at).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
@@ -1032,6 +1038,169 @@ document.getElementById('manageListModal').addEventListener('click', (e) => {
     document.body.style.overflow = '';
   }
 });
+
+// ── Followers / Following Modal ─────────────────────────────
+function openFollowModal(mode, username) {
+  // mode = 'followers' | 'following'
+  let modal = document.getElementById('followListModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'followListModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:300;display:flex;align-items:center;justify-content:center;padding:24px';
+    modal.addEventListener('click', function(e){ if (e.target === modal) closeFollowModal(); });
+    document.body.appendChild(modal);
+  }
+
+  const title = mode === 'followers' ? 'Followers' : 'Following';
+  const isOwnProfile = auth.getUser()?.username === username;
+
+  modal.innerHTML =
+    '<div style="background:var(--bg-card);border:1px solid var(--border-md);border-radius:var(--radius-xl);width:100%;max-width:460px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.7)">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border);flex-shrink:0">'
+    +   '<h3 style="font-family:Playfair Display,serif;font-size:1.2rem" id="followModalTitle">' + title + '</h3>'
+    +   '<button onclick="closeFollowModal()" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:1.1rem;background:none;border:none;cursor:pointer;transition:var(--transition)" onmouseover="this.style.background=\'var(--bg-raised)\'" onmouseout="this.style.background=\'none\'">✕</button>'
+    + '</div>'
+    + '<div id="followListBody" style="overflow-y:auto;padding:12px 24px 20px;flex:1">'
+    +   '<p style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Loading…</p>'
+    + '</div>'
+    + '</div>';
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const url = '/api/users/' + encodeURIComponent(username) + '/' + mode;
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(users) {
+      const body = document.getElementById('followListBody');
+      if (!users.length) {
+        body.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;padding:30px 0;text-align:center">'
+          + (mode === 'followers' ? 'No followers yet.' : 'Not following anyone yet.') + '</p>';
+        return;
+      }
+
+      document.getElementById('followModalTitle').textContent = title + ' (' + users.length + ')';
+      body.innerHTML = '';
+      users.forEach(function(u) {
+        body.appendChild(makeFollowRow(u, mode, username, isOwnProfile));
+      });
+    })
+    .catch(function(err){
+      const body = document.getElementById('followListBody');
+      if (body) body.innerHTML = '<p style="color:#e05c5c;font-size:.875rem;padding:20px 0">Could not load — ' + err.message + '</p>';
+    });
+}
+
+function makeFollowRow(u, mode, profileUsername, isOwnProfile) {
+  const row = document.createElement('div');
+  row.id = 'frow-' + u.id;
+  row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)';
+
+  // Avatar
+  const av = document.createElement('div');
+  av.style.cssText = 'width:40px;height:40px;border-radius:50%;background:' + (u.avatar_gradient || 'var(--bg-raised)') + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#fff;flex-shrink:0;cursor:pointer';
+  av.textContent = (u.initials || u.username.slice(0,2)).toUpperCase();
+  av.onclick = function(){ closeFollowModal(); location.href = 'profile.html?u=' + encodeURIComponent(u.username); };
+  row.appendChild(av);
+
+  // Name + review count
+  const info = document.createElement('div');
+  info.style.cssText = 'flex:1;min-width:0;cursor:pointer';
+  info.onclick = function(){ closeFollowModal(); location.href = 'profile.html?u=' + encodeURIComponent(u.username); };
+  const name = document.createElement('div');
+  name.style.cssText = 'font-weight:700;font-size:.9rem';
+  name.textContent = '@' + u.username;
+  const sub = document.createElement('div');
+  sub.style.cssText = 'font-size:.75rem;color:var(--text-muted)';
+  sub.textContent = (u.review_count || 0) + ' review' + (u.review_count !== 1 ? 's' : '');
+  info.appendChild(name);
+  info.appendChild(sub);
+  row.appendChild(info);
+
+  // Action button
+  const me = auth.getUser();
+  const btn = document.createElement('button');
+  btn.style.cssText = 'padding:6px 14px;border-radius:40px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0';
+
+  if (mode === 'followers' && isOwnProfile) {
+    // Own followers list — show "Remove" button
+    btn.textContent = 'Remove';
+    btn.style.cssText += ';background:none;color:var(--text-muted);border:1px solid var(--border-md)';
+    btn.onmouseover = function(){ btn.style.color='#e05c5c'; btn.style.borderColor='#e05c5c'; };
+    btn.onmouseout  = function(){ btn.style.color='var(--text-muted)'; btn.style.borderColor='var(--border-md)'; };
+    btn.onclick = function(){ removeFollower(profileUsername, u.username, u.id, btn); };
+    row.appendChild(btn);
+
+  } else if (mode === 'following' && me) {
+    // Following list — show Unfollow if it's yourself, or follow/unfollow state for others
+    const isMe = me.username === u.username;
+    if (!isMe) {
+      btn.textContent = isOwnProfile ? 'Unfollow' : '+ Follow';
+      if (isOwnProfile) {
+        btn.style.cssText += ';background:none;color:var(--text-muted);border:1px solid var(--border-md)';
+        btn.onmouseover = function(){ btn.style.color='#e05c5c'; btn.style.borderColor='#e05c5c'; };
+        btn.onmouseout  = function(){ btn.style.color='var(--text-muted)'; btn.style.borderColor='var(--border-md)'; };
+        btn.onclick = function(){ unfollowUser(u.username, u.id, btn, profileUsername); };
+      } else {
+        btn.style.cssText += ';background:var(--gold);color:#0b0b12;border:none';
+        btn.onclick = function(){ location.href = 'profile.html?u=' + encodeURIComponent(u.username); };
+      }
+      row.appendChild(btn);
+    }
+  }
+
+  return row;
+}
+
+function removeFollower(profileUsername, followerUsername, userId, btn) {
+  if (!confirm('Remove @' + followerUsername + ' from your followers? They won\'t be notified.')) return;
+  btn.disabled = true; btn.textContent = 'Removing…';
+  const token = auth.getToken();
+  fetch('/api/users/' + encodeURIComponent(profileUsername) + '/followers/' + encodeURIComponent(followerUsername), {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      document.getElementById('frow-' + userId)?.remove();
+      // Update count in header
+      const statEl = document.getElementById('statFollowers');
+      if (statEl && data.followerCount !== undefined) statEl.textContent = data.followerCount;
+      // Update modal title count
+      const titleEl = document.getElementById('followModalTitle');
+      if (titleEl) {
+        const remaining = document.getElementById('followListBody').querySelectorAll('[id^=frow-]').length;
+        titleEl.textContent = 'Followers (' + remaining + ')';
+      }
+    })
+    .catch(function(err){ alert('Could not remove follower: ' + err.message); btn.disabled = false; btn.textContent = 'Remove'; });
+}
+
+function unfollowUser(username, userId, btn, profileUsername) {
+  if (!confirm('Unfollow @' + username + '?')) return;
+  btn.disabled = true; btn.textContent = 'Unfollowing…';
+  const token = auth.getToken();
+  fetch('/api/users/' + encodeURIComponent(username) + '/follow', {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  }).then(function(r){ return r.json(); })
+    .then(function(){
+      document.getElementById('frow-' + userId)?.remove();
+      const statEl = document.getElementById('statFollowing');
+      if (statEl) statEl.textContent = Math.max(0, parseInt(statEl.textContent || '0') - 1);
+      const titleEl = document.getElementById('followModalTitle');
+      if (titleEl) {
+        const remaining = document.getElementById('followListBody').querySelectorAll('[id^=frow-]').length;
+        titleEl.textContent = 'Following (' + remaining + ')';
+      }
+    })
+    .catch(function(err){ alert('Could not unfollow: ' + err.message); btn.disabled = false; btn.textContent = 'Unfollow'; });
+}
+
+function closeFollowModal() {
+  const modal = document.getElementById('followListModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
 </script>
 </body>
 </html>
