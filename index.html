@@ -301,7 +301,9 @@ function toggleNewReleases() {
 }
 
 // ── Recent Reviews ──────────────────────────────────────────
-async function loadRecentReviews(limit = 20) {
+async function loadRecentReviews(limit) {
+  const isMobile = document.body.classList.contains('mobile-view') || (window.innerWidth <= 768 && !document.body.classList.contains('force-desktop'));
+  if (limit === undefined) limit = isMobile ? 5 : 20;
   try {
     const reviews = await api.get(`/api/reviews/recent?limit=${limit}`);
     const feed = document.getElementById('reviewFeed');

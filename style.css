@@ -989,8 +989,14 @@ body.mobile-view { overflow-x: hidden; width: 100%; }
 
   /* ── Main grid: stack sidebar below feed ─── */
   body:not(.force-desktop) .main-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 0 !important;
+  }
+  /* Grid children MUST have min-width:0 or they ignore the 1fr cap */
+  body:not(.force-desktop) .main-grid > * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   /* Aside becomes a compact strip below the review feed */
   body:not(.force-desktop) .main-grid aside {
@@ -998,6 +1004,22 @@ body.mobile-view { overflow-x: hidden; width: 100%; }
     padding-top: 20px;
     margin-top: 4px;
   }
+  /* Feed and all its cards stay inside the column */
+  body:not(.force-desktop) .feed {
+    min-width: 0;
+    width: 100%;
+  }
+  body:not(.force-desktop) .review-card {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    word-break: break-word;
+  }
+  body:not(.force-desktop) .review-card__user {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  body:not(.force-desktop) .review-card__date { display: none; }
   /* ── "Most Streamed Today" — horizontal swipe strip ── */
   body:not(.force-desktop) #popularList {
     display: flex !important;
@@ -1041,17 +1063,6 @@ body.mobile-view { overflow-x: hidden; width: 100%; }
   body:not(.force-desktop) #popularList .top5-item__title { font-size: .72rem; }
   body:not(.force-desktop) #popularList .top5-item__sub  { font-size: .65rem; }
 
-  /* ── Review cards — fit to viewport, no overflow ── */
-  body:not(.force-desktop) .review-card {
-    width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-  }
-  body:not(.force-desktop) .review-card__user {
-    flex-wrap: wrap;
-    row-gap: 4px;
-  }
-  body:not(.force-desktop) .review-card__date { display: none; }
   body:not(.force-desktop) .review-card__text { -webkit-line-clamp: 3; }
 
   /* Hide import box on mobile — accessible from hamburger menu */
@@ -1116,18 +1127,21 @@ body.mobile-view .album-header__actions { justify-content: center; }
 body.mobile-view .track-item { padding: 10px 14px; gap: 10px; }
 body.mobile-view .profile-header__inner { flex-direction: column; align-items: flex-start; gap: 16px; }
 body.mobile-view .stats-row { gap: 16px; }
-body.mobile-view .review-card { padding: 14px; width: 100%; box-sizing: border-box; overflow: hidden; }
+body.mobile-view .review-card { padding: 14px; }
 body.mobile-view .review-card__album-art { width: 48px; height: 48px; }
-body.mobile-view .review-card__user { flex-wrap: wrap; row-gap: 4px; }
-body.mobile-view .review-card__date { display: none; }
 body.mobile-view .review-card__text { -webkit-line-clamp: 3; }
 body.mobile-view .modal-backdrop { align-items: flex-end; padding: 0; }
 body.mobile-view .modal { max-width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 24px 20px 36px; transform: translateY(100%); }
 body.mobile-view .modal-backdrop.open .modal { transform: translateY(0); }
 body.mobile-view .section { padding: 32px 0; }
 body.mobile-view .section__header { flex-direction: column; gap: 8px; }
-body.mobile-view .main-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
+body.mobile-view .main-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
+body.mobile-view .main-grid > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
 body.mobile-view .main-grid aside { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 4px; }
+body.mobile-view .feed { min-width: 0; width: 100%; }
+body.mobile-view .review-card { min-width: 0; width: 100%; box-sizing: border-box; word-break: break-word; }
+body.mobile-view .review-card__user { flex-wrap: wrap; row-gap: 4px; }
+body.mobile-view .review-card__date { display: none; }
 body.mobile-view #popularList { display: flex !important; flex-direction: row !important; gap: 12px !important; overflow-x: auto !important; overflow-y: visible; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 body.mobile-view #popularList::-webkit-scrollbar { display: none; }
 body.mobile-view #popularList .top5-item { display: flex !important; flex: 0 0 100px !important; flex-direction: column !important; align-items: flex-start !important; gap: 5px !important; width: 100px !important; padding: 0 !important; background: none !important; border: none !important; border-radius: 0 !important; transform: none !important; }
