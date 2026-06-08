@@ -226,15 +226,20 @@ async function loadTrending() {
 
     // "Most Streamed Today" sidebar — top 10
     document.getElementById('popularList').innerHTML =
-      albums.slice(0, 10).map((a, i) => `
-        <div class="top5-item" onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'" style="padding:8px 10px">
+      albums.slice(0, 10).map((a, i) => {
+        const params = new URLSearchParams({ id: a.itunesId });
+        if (a.title)  params.set('title',  a.title);
+        if (a.artist) params.set('artist', a.artist);
+        return `
+        <div class="top5-item" onclick="location.href='album.html?${params.toString()}'" style="padding:8px 10px">
           <div class="top5-item__num" style="font-size:1.1rem;min-width:22px">${i + 1}</div>
           <div class="top5-item__art"><img src="${escHtml(a.artwork)}" alt="" loading="lazy"></div>
           <div class="top5-item__info">
             <div class="top5-item__title" style="font-size:.82rem">${escHtml(a.title)}</div>
             <div class="top5-item__sub" style="font-size:.74rem">${escHtml(a.artist)}</div>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
 
     document.getElementById('trendingSource').textContent = 'Apple Music + Deezer + Last.fm — Updated Daily';
   } catch {
