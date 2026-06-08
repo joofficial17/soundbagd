@@ -108,9 +108,13 @@ async function initPage() {
   // Load site stats
   try {
     const stats = await api.get('/api/stats');
-    document.getElementById('statMembers').textContent = stats.members.toLocaleString();
-    document.getElementById('statReviews').textContent = stats.reviews.toLocaleString();
-  } catch {}
+    document.getElementById('statMembers').textContent = (stats.members ?? 0).toLocaleString();
+    document.getElementById('statReviews').textContent = (stats.reviews ?? 0).toLocaleString();
+  } catch (e) {
+    console.error('Stats failed:', e.message);
+    document.getElementById('statMembers').textContent = '?';
+    document.getElementById('statReviews').textContent = '?';
+  }
 
   loadUsers('');
 }

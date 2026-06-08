@@ -1270,20 +1270,22 @@ app.get('/api/users/search', (req, res) => {
            (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) AS follower_count
     FROM users u
     WHERE u.username LIKE ?
-      AND (u.banned IS NULL OR u.banned = 0)
     ORDER BY review_count DESC, u.created_at ASC
     LIMIT ?
   `).all(`%${q}%`, limit);
+
+  // Filter banned users in JS so the query works even if the column migration is pending
+  const safe = users.filter(u => !u.banned);
 
   // Add isFollowing flag if viewer is logged in
   if (viewerId) {
     const followSet = new Set(
       db.prepare('SELECT following_id FROM follows WHERE follower_id=?').all(viewerId).map(r => r.following_id)
     );
-    users.forEach(u => { u.isFollowing = followSet.has(u.id); });
+    safe.forEach(u => { u.isFollowing = followSet.has(u.id); });
   }
 
-  res.json(users);
+  res.json(safe);
 });
 
 // GET /api/reviews/mine/:itunesId  — did the current user review this?
@@ -1730,13 +1732,15 @@ app.get('/api/recommendations/:username', async (req, res) => {
 
 // GET /api/stats
 app.get('/api/stats', (req, res) => {
-  const stats = db.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM users)   AS members,
-      (SELECT COUNT(*) FROM reviews) AS reviews,
-      (SELECT COUNT(*) FROM albums)  AS albums
-  `).get();
-  res.json(stats);
+  try {
+    const members = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+    const reviews = db.prepare('SELECT COUNT(*) AS c FROM reviews').get().c;
+    const albums  = db.prepare('SELECT COUNT(*) AS c FROM albums').get().c;
+    res.json({ members, reviews, albums });
+  } catch (err) {
+    console.error('Stats error:', err.message);
+    res.json({ members: 0, reviews: 0, albums: 0 });
+  }
 });
 
 // ── FLAG ROUTES ────────────────────────────────────────────
