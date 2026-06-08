@@ -60,13 +60,19 @@
 
 <!-- ── Profile Content ────────────────────────────────────── -->
 <div class="container" style="padding-top:40px;padding-bottom:60px">
-  <div class="profile-main-grid" style="display:grid;grid-template-columns:1fr 300px;gap:40px">
+  <div style="max-width:860px;margin:0 auto">
 
     <!-- Main content -->
     <div>
 
       <!-- REVIEWS TAB -->
       <div id="tab-reviews">
+        <!-- Recently Reviewed strip -->
+        <div id="recentlyGrid" style="margin-bottom:28px">
+          <h2 class="h4" style="margin-bottom:12px">Recently Reviewed</h2>
+          <div id="recentlyReviewedGrid" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
+        </div>
+
         <div class="section__header" style="margin-bottom:20px">
           <h2 class="h4" id="reviewsTabTitle">Reviews</h2>
         </div>
@@ -178,14 +184,6 @@
 
     </div>
 
-    <!-- Sidebar -->
-    <aside>
-      <!-- Recently reviewed grid -->
-      <div id="recentlyGrid" style="margin-bottom:24px">
-        <h2 class="h4" style="margin-bottom:14px">Recently Reviewed</h2>
-        <div id="recentlyReviewedGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
-      </div>
-    </aside>
   </div>
 </div>
 
@@ -430,8 +428,8 @@ async function loadProfileReviews(username) {
 
     // Recently reviewed grid
     const grid = document.getElementById('recentlyReviewedGrid');
-    grid.innerHTML = reviews.slice(0,8).map(r => `
-      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="location.href='album.html?id=${encodeURIComponent(r.itunes_id)}'">
+    grid.innerHTML = reviews.slice(0,10).map(r => `
+      <div style="flex:0 0 72px;width:72px;height:72px;border-radius:8px;overflow:hidden;cursor:pointer" title="${escHtml(r.title)}" onclick="location.href='album.html?id=${encodeURIComponent(r.itunes_id)}'">
         <img src="${escHtml(r.artwork_url)}" alt="${escHtml(r.title)}" loading="lazy" style="width:100%;height:100%;object-fit:cover">
       </div>`).join('');
 
