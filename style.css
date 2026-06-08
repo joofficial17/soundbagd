@@ -969,6 +969,45 @@ body.mobile-view { overflow-x: hidden; width: 100%; }
   body:not(.force-desktop) .profile-header__info { min-width: 0; width: 100%; }
   body:not(.force-desktop) .stats-row { gap: 16px; }
 
+  /* Profile main grid: stack sidebar below content */
+  body:not(.force-desktop) .profile-main-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+  body:not(.force-desktop) .profile-main-grid > * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body:not(.force-desktop) .profile-main-grid aside {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    margin-top: 8px;
+  }
+  /* Recently Reviewed: horizontal scroll strip on mobile */
+  body:not(.force-desktop) #recentlyReviewedGrid {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    overflow-y: visible;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  body:not(.force-desktop) #recentlyReviewedGrid::-webkit-scrollbar { display: none; }
+  body:not(.force-desktop) #recentlyReviewedGrid > div {
+    flex: 0 0 72px !important;
+    width: 72px !important;
+    height: 72px !important;
+  }
+
+  /* Ratings page: stack acclaimed/panned on mobile */
+  body:not(.force-desktop) #ratingsGrid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
   /* Review cards — tighter */
   body:not(.force-desktop) .review-card { padding: 14px; }
   body:not(.force-desktop) .review-card__album-art { width: 48px; height: 48px; }
@@ -1168,6 +1207,21 @@ body.mobile-view .container--wide,
 body.mobile-view .container--narrow { padding: 0 16px; }
 body.mobile-view #viewToggle { bottom: 72px; }
 body.mobile-view #mobileSearchBar { display: block !important; }
+
+/* Profile main grid stacking — forced mobile-view */
+body.mobile-view .profile-main-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+body.mobile-view .profile-main-grid > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+body.mobile-view .profile-main-grid aside { border-top: 1px solid var(--border); padding-top: 24px; margin-top: 8px; }
+body.mobile-view #recentlyReviewedGrid {
+  display: flex !important; flex-direction: row !important;
+  gap: 8px !important; overflow-x: auto !important; overflow-y: visible;
+  padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+body.mobile-view #recentlyReviewedGrid::-webkit-scrollbar { display: none; }
+body.mobile-view #recentlyReviewedGrid > div { flex: 0 0 72px !important; width: 72px !important; height: 72px !important; }
 
 @media (max-width: 768px) {
   body:not(.force-desktop) #mobileSearchBar { display: block !important; }

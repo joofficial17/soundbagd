@@ -58,38 +58,103 @@
 
 <!-- Content -->
 <div class="container" style="padding-top:40px;padding-bottom:80px">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px" id="ratingsGrid">
+  <div id="ratingsGrid" style="display:flex;flex-direction:column;gap:16px">
 
-    <!-- Acclaimed -->
-    <div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--gold)">
-        <span style="font-size:1.4rem">🏆</span>
-        <div>
-          <h2 class="h4" style="margin:0">Critically Acclaimed</h2>
-          <div class="text-xs muted">Rated 4 stars or higher</div>
+    <!-- Acclaimed accordion -->
+    <div class="ratings-accordion" id="acclaimedAccordion">
+      <button class="ratings-accordion__header" onclick="toggleAccordion('acclaimed')" aria-expanded="true" aria-controls="acclaimedBody">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.4rem">🏆</span>
+          <div style="text-align:left">
+            <div class="h4" style="margin:0">Critically Acclaimed</div>
+            <div class="text-xs muted">Rated 4 stars or higher</div>
+          </div>
         </div>
+        <svg class="ratings-accordion__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="ratings-accordion__body" id="acclaimedBody">
+        <div id="acclaimedList" style="max-width:680px"></div>
       </div>
-      <div id="acclaimedList"></div>
     </div>
 
-    <!-- Panned -->
-    <div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--coral, #e05c5c)">
-        <span style="font-size:1.4rem">💔</span>
-        <div>
-          <h2 class="h4" style="margin:0">Critically Panned</h2>
-          <div class="text-xs muted">Rated 2 stars or lower</div>
+    <!-- Panned accordion -->
+    <div class="ratings-accordion" id="pannedAccordion">
+      <button class="ratings-accordion__header ratings-accordion__header--panned" onclick="toggleAccordion('panned')" aria-expanded="true" aria-controls="pannedBody">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.4rem">💔</span>
+          <div style="text-align:left">
+            <div class="h4" style="margin:0">Critically Panned</div>
+            <div class="text-xs muted">Rated 2 stars or lower</div>
+          </div>
         </div>
+        <svg class="ratings-accordion__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="ratings-accordion__body" id="pannedBody">
+        <div id="pannedList" style="max-width:680px"></div>
       </div>
-      <div id="pannedList"></div>
     </div>
 
   </div>
+
+  <style>
+    .ratings-accordion {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      overflow: hidden;
+    }
+    .ratings-accordion__header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid var(--gold);
+      color: var(--text);
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .ratings-accordion__header--panned {
+      border-bottom-color: var(--coral, #e05c5c);
+    }
+    .ratings-accordion__header:hover { background: var(--bg-raised); }
+    .ratings-accordion__chevron {
+      flex-shrink: 0;
+      transition: transform 0.25s ease;
+    }
+    .ratings-accordion--collapsed .ratings-accordion__header {
+      border-bottom-color: transparent;
+    }
+    .ratings-accordion--collapsed .ratings-accordion__chevron {
+      transform: rotate(-90deg);
+    }
+    .ratings-accordion__body {
+      padding: 0 20px;
+      max-height: 2000px;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.25s ease;
+    }
+    .ratings-accordion--collapsed .ratings-accordion__body {
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  </style>
 </div>
 
 <script src="app.js"></script>
 <script>
 let _activeType = 'all';
+
+function toggleAccordion(which) {
+  const el = document.getElementById(which + 'Accordion');
+  const body = document.getElementById(which + 'Body');
+  const btn = el.querySelector('.ratings-accordion__header');
+  const collapsed = el.classList.toggle('ratings-accordion--collapsed');
+  btn.setAttribute('aria-expanded', String(!collapsed));
+}
 
 async function initPage() {
   loadRatings();
