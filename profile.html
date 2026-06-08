@@ -1041,8 +1041,10 @@ async function runListSearch(q) {
   try {
     const results = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=album&limit=6`);
     if (!results.length) { resultsEl.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:.85rem">No results.</div>'; return; }
-    resultsEl.innerHTML = results.map(a => `
-      <div onclick='addToList(${JSON.stringify(a)})'
+    // Store results in a map so onclick can reference by index (avoids single-quote escaping issues with artist names)
+    window._listSearchResults = results;
+    resultsEl.innerHTML = results.map((a, i) => `
+      <div onclick="addToList(window._listSearchResults[${i}])"
         style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .15s"
         onmouseenter="this.style.background='var(--bg-card)'" onmouseleave="this.style.background=''">
         <img src="${escHtml(a.artwork)}" style="width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)" alt="">

@@ -219,6 +219,7 @@ db.exec(`
 
 // ── DB Migrations (add columns to existing tables) ────────
 try { db.exec("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE reviews ADD COLUMN last_listened TEXT DEFAULT NULL"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''"); } catch {}
@@ -1213,7 +1214,7 @@ function sanitizeDspUrl(url) {
 }
 
 app.post('/api/reviews', auth, writeLimiter, (req, res) => {
-  const { itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl, rating, reviewText, dspUrl, tags } = req.body || {};
+  const { itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl, rating, reviewText, dspUrl, tags, lastListened } = req.body || {};
 
   if (!title)   return res.status(400).json({ error: 'Album title is required' });
   if (!rating)  return res.status(400).json({ error: 'Rating is required' });
@@ -1223,19 +1224,22 @@ app.post('/api/reviews', auth, writeLimiter, (req, res) => {
 
   const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
   const safeDspUrl = sanitizeDspUrl(dspUrl);
+  // lastListened: expect "YYYY-MM-DD" or "YYYY-MM" or "YYYY" string, max 10 chars
+  const safeLastListened = lastListened ? String(lastListened).slice(0, 10) : null;
 
   try {
     const albumId = upsertAlbum({ itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl });
     db.prepare(`
-      INSERT INTO reviews (user_id, album_id, rating, review_text, dsp_url, tags)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO reviews (user_id, album_id, rating, review_text, dsp_url, tags, last_listened)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, album_id) DO UPDATE SET
-        rating      = excluded.rating,
-        review_text = excluded.review_text,
-        dsp_url     = excluded.dsp_url,
-        tags        = excluded.tags,
-        created_at  = CURRENT_TIMESTAMP
-    `).run(req.user.id, albumId, r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr);
+        rating         = excluded.rating,
+        review_text    = excluded.review_text,
+        dsp_url        = excluded.dsp_url,
+        tags           = excluded.tags,
+        last_listened  = excluded.last_listened,
+        created_at     = CURRENT_TIMESTAMP
+    `).run(req.user.id, albumId, r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr, safeLastListened);
 
     res.json({ success: true });
   } catch (err) {
@@ -1254,7 +1258,7 @@ app.delete('/api/reviews/:itunesId', auth, (req, res) => {
 
 // PUT /api/reviews/:itunesId
 app.put('/api/reviews/:itunesId', auth, writeLimiter, (req, res) => {
-  const { rating, reviewText, dspUrl, tags } = req.body || {};
+  const { rating, reviewText, dspUrl, tags, lastListened } = req.body || {};
   const r = Number(rating);
   if (!rating || isNaN(r) || r < 0.5 || r > 5 || (r * 2) % 1 !== 0)
     return res.status(400).json({ error: 'Rating must be 0.5–5.0 in half-star steps' });
@@ -1264,11 +1268,12 @@ app.put('/api/reviews/:itunesId', auth, writeLimiter, (req, res) => {
 
   const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
   const safeDspUrl = sanitizeDspUrl(dspUrl);
+  const safeLastListened = lastListened ? String(lastListened).slice(0, 10) : null;
 
   const result = db.prepare(`
-    UPDATE reviews SET rating=?, review_text=?, dsp_url=?, tags=?, created_at=CURRENT_TIMESTAMP
+    UPDATE reviews SET rating=?, review_text=?, dsp_url=?, tags=?, last_listened=?, created_at=CURRENT_TIMESTAMP
     WHERE user_id=? AND album_id=?
-  `).run(r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr, req.user.id, album.id);
+  `).run(r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr, safeLastListened, req.user.id, album.id);
 
   if (!result.changes) return res.status(404).json({ error: 'Review not found' });
   res.json({ success: true });
@@ -1287,7 +1292,7 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
   } catch {}
 
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags,
+    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags, r.last_listened,
            u.username, u.initials, u.avatar_gradient,
            (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
            (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count
@@ -1311,7 +1316,7 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
 app.get('/api/reviews/recent', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 50);
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags,
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags, r.last_listened,
            u.username, u.initials, u.avatar_gradient,
            a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
            (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
@@ -1452,7 +1457,7 @@ app.get('/api/users/:username/reviews', (req, res) => {
   if (!u) return res.status(404).json({ error: 'User not found' });
 
   const reviews = db.prepare(`
-    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags,
+    SELECT r.id, r.rating, r.review_text, r.dsp_url, r.created_at, r.tags, r.last_listened,
            a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
            (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count
     FROM reviews r JOIN albums a ON r.album_id = a.id

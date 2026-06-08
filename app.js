@@ -235,6 +235,16 @@ function escHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Formats a last_listened value ("YYYY", "YYYY-MM", or "YYYY-MM-DD") into a readable string
+function formatLastListened(val) {
+  if (!val) return '';
+  const parts = val.split('-');
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (parts.length === 3) return `${months[parseInt(parts[1],10)-1]} ${parseInt(parts[2],10)}, ${parts[0]}`;
+  if (parts.length === 2) return `${months[parseInt(parts[1],10)-1]} ${parts[0]}`;
+  return parts[0];
+}
+
 // ── Album Card HTML ────────────────────────────────────────
 function albumCardHtml(album) {
   // Pass title+artist alongside ID so the album page can search by them
@@ -290,6 +300,7 @@ function reviewCardHtml(r) {
       </div>
       ${hasText ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
       ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${tags.map(t => `<span class="mood-tag">#${escHtml(t)}</span>`).join('')}</div>` : ''}
+      ${r.last_listened ? `<div style="margin-top:8px;font-size:.75rem;color:var(--text-muted)">🎧 Last listened: <span style="color:var(--text)">${formatLastListened(r.last_listened)}</span></div>` : ''}
     </div>`;
 }
 
@@ -538,6 +549,30 @@ function injectReviewModal() {
         </div>
       </div>
 
+      <!-- Last Listened -->
+      <div style="margin-top:16px">
+        <span class="modal__label" style="display:flex;align-items:center;gap:6px">
+          🎧 Last Listened <span class="text-xs muted">(optional)</span>
+        </span>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <select id="lastListenedDay" style="flex:1;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Day</option>
+            ${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
+          </select>
+          <select id="lastListenedMonth" style="flex:2;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Month</option>
+            ${['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('')}
+          </select>
+          <select id="lastListenedYear" style="flex:1.5;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Year</option>
+            ${Array.from({length:2026-1975+1},(_,i)=>2026-i).map(y=>`<option value="${y}">${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
       <!-- DSP Link -->
       <div style="margin-top:16px">
         <span class="modal__label" style="display:flex;align-items:center;gap:6px">
@@ -606,6 +641,9 @@ function openReviewModal(album) {
   document.getElementById('dspRefUrl').value    = '';
   document.getElementById('charCount').textContent = '0 / 2000';
   document.getElementById('reviewError').style.display = 'none';
+  document.getElementById('lastListenedDay').value   = '';
+  document.getElementById('lastListenedMonth').value = '';
+  document.getElementById('lastListenedYear').value  = '';
   // Reset mood tags
   document.querySelectorAll('#reviewMoodTags .mood-tag').forEach(t => t.classList.remove('selected'));
   setReviewMode('star');
@@ -662,6 +700,15 @@ async function submitReview() {
       reviewText: _reviewMode === 'written' ? document.getElementById('reviewText').value.trim() : '',
       dspUrl:     document.getElementById('dspRefUrl').value.trim() || '',
       tags:       getSelectedMoodTags('reviewMoodTags'),
+      lastListened: (() => {
+        const y = document.getElementById('lastListenedYear').value;
+        const m = document.getElementById('lastListenedMonth').value;
+        const d = document.getElementById('lastListenedDay').value;
+        if (!y) return '';
+        if (!m) return y;
+        if (!d) return `${y}-${m}`;
+        return `${y}-${m}-${d}`;
+      })(),
     });
 
     closeReviewModal();
