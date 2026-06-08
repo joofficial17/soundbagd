@@ -900,6 +900,39 @@ h4, .h4 { font-size: 0.95rem; font-weight: 600; letter-spacing: 0.08em; text-tra
 }
 body.mobile-view { --mobile: 1; }
 
+/* ── Prevent page-level horizontal scroll on mobile ──────── */
+/* Intentional scroll containers (trending, charts, releases)
+   use overflow-x:auto internally and are unaffected by this. */
+@media (max-width: 768px) {
+  body:not(.force-desktop) {
+    overflow-x: hidden;
+  }
+  /* Clamp wide containers to viewport */
+  body:not(.force-desktop) .container,
+  body:not(.force-desktop) .container--wide,
+  body:not(.force-desktop) .container--narrow,
+  body:not(.force-desktop) section,
+  body:not(.force-desktop) .section,
+  body:not(.force-desktop) .main-grid,
+  body:not(.force-desktop) .feed,
+  body:not(.force-desktop) aside {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+body.mobile-view { overflow-x: hidden; }
+body.mobile-view .container,
+body.mobile-view .container--wide,
+body.mobile-view .container--narrow,
+body.mobile-view section,
+body.mobile-view .section,
+body.mobile-view .main-grid,
+body.mobile-view .feed,
+body.mobile-view aside {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Everything below only applies when --mobile is set */
 @media (max-width: 768px) {
   body:not(.force-desktop) .nav__links  { display: none; }
@@ -993,9 +1026,8 @@ body.mobile-view { --mobile: 1; }
     padding-bottom: 10px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    margin: 0 -16px;
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 4px;
+    padding-right: 4px;
   }
   body:not(.force-desktop) #popularList::-webkit-scrollbar { display: none; }
   body:not(.force-desktop) #popularList .top5-item {
