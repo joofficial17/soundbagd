@@ -286,7 +286,7 @@ function reviewCardHtml(r) {
         <div class="review-card__info">
           <div class="review-card__title" style="cursor:pointer" onclick="location.href='album.html?id=${escHtml(r.itunes_id)}'">${escHtml(r.title)}</div>
           <div class="review-card__artist">${escHtml(r.artist)} · ${escHtml(r.media_type || 'Album')}</div>
-          <div style="display:flex;align-items:center;gap:4px">${starsHtml(r.rating)}<span style="font-size:0.75rem;color:var(--gold);font-weight:600;margin-left:4px">${r.rating}</span></div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">${starsHtml(r.rating)}<span style="font-size:0.75rem;color:var(--gold);font-weight:600;margin-left:4px">${r.rating}</span>${r.last_listened ? `<span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">· Last listened: <strong style="color:var(--text)">${formatLastListened(r.last_listened)}</strong></span>` : ''}</div>
         </div>
       </div>
       <div class="review-card__user">
@@ -300,7 +300,6 @@ function reviewCardHtml(r) {
       </div>
       ${hasText ? `<p class="review-card__text">${escHtml(r.review_text)}</p>` : '<p class="text-xs muted" style="font-style:italic">Rated without a written review</p>'}
       ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${tags.map(t => `<span class="mood-tag">#${escHtml(t)}</span>`).join('')}</div>` : ''}
-      ${r.last_listened ? `<div style="margin-top:8px;font-size:.75rem;color:var(--text-muted)">🎧 Last listened: <span style="color:var(--text)">${formatLastListened(r.last_listened)}</span></div>` : ''}
     </div>`;
 }
 
@@ -917,6 +916,30 @@ function injectEditReviewModal() {
         </div>
       </div>
 
+      <!-- Last Listened -->
+      <div style="margin-top:16px">
+        <span class="modal__label" style="display:flex;align-items:center;gap:6px">
+          🎧 Last Listened <span class="text-xs muted">(optional)</span>
+        </span>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <select id="editLastListenedDay" style="flex:1;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Day</option>
+            ${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
+          </select>
+          <select id="editLastListenedMonth" style="flex:2;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Month</option>
+            ${['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('')}
+          </select>
+          <select id="editLastListenedYear" style="flex:1.5;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;color:var(--text);font-size:.85rem;outline:none;cursor:pointer"
+            onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''">
+            <option value="">Year</option>
+            ${Array.from({length:2026-1975+1},(_,i)=>2026-i).map(y=>`<option value="${y}">${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
       <div style="margin-top:16px">
         <span class="modal__label">Reference Link <span class="text-xs muted">(optional)</span></span>
         <input id="editDspUrl" type="url" placeholder="Paste Spotify, Apple Music, TIDAL, YouTube link…"
@@ -975,6 +998,11 @@ async function openEditReviewModal(itunesId) {
       document.getElementById('editCharCount').textContent = '0 / 2000';
     }
     document.getElementById('editDspUrl').value = review.dsp_url || '';
+    // Populate last listened selects from stored value ("YYYY-MM-DD", "YYYY-MM", or "YYYY")
+    const ll = (review.last_listened || '').split('-');
+    document.getElementById('editLastListenedYear').value  = ll[0] || '';
+    document.getElementById('editLastListenedMonth').value = ll[1] || '';
+    document.getElementById('editLastListenedDay').value   = ll[2] || '';
     document.getElementById('editReviewError').style.display = 'none';
   } catch (err) {
     showToast('Could not load review: ' + err.message);
@@ -1009,6 +1037,15 @@ async function saveEditedReview() {
       rating,
       reviewText: _editReviewMode === 'written' ? document.getElementById('editReviewText').value.trim() : '',
       dspUrl: document.getElementById('editDspUrl').value.trim() || '',
+      lastListened: (() => {
+        const y = document.getElementById('editLastListenedYear').value;
+        const m = document.getElementById('editLastListenedMonth').value;
+        const d = document.getElementById('editLastListenedDay').value;
+        if (!y) return '';
+        if (!m) return y;
+        if (!d) return `${y}-${m}`;
+        return `${y}-${m}-${d}`;
+      })(),
     });
     closeEditReviewModal();
     showToast('Review updated! 🎵');

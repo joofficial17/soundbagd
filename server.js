@@ -1417,7 +1417,7 @@ app.get('/api/reviews/mine/:itunesId', auth, (req, res) => {
   const album = db.prepare('SELECT id FROM albums WHERE itunes_id=?').get(req.params.itunesId);
   if (!album) return res.json(null);
   const review = db.prepare(
-    'SELECT id, rating, review_text, dsp_url, tags FROM reviews WHERE user_id=? AND album_id=?'
+    'SELECT id, rating, review_text, dsp_url, tags, last_listened FROM reviews WHERE user_id=? AND album_id=?'
   ).get(req.user.id, album.id);
   res.json(review || null);
 });
