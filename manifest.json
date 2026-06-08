@@ -1,0 +1,47 @@
+{
+  "name": "Soundbagd",
+  "short_name": "Soundbagd",
+  "description": "Track, rate & review every album. Build your music diary, share your taste.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f0e17",
+  "theme_color": "#d4af37",
+  "categories": ["music", "entertainment", "social"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Explore Music",
+      "short_name": "Explore",
+      "url": "/index.html",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Community",
+      "short_name": "Community",
+      "url": "/community.html",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "My Profile",
+      "short_name": "Profile",
+      "url": "/profile.html",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any" }]
+    }
+  ]
+}

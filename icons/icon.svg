@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0f0e17"/>
+  <!-- Gold glow -->
+  <circle cx="256" cy="256" r="180" fill="url(#glow)" opacity="0.3"/>
+  <!-- Music note -->
+  <g fill="#d4af37">
+    <!-- Note head 1 -->
+    <ellipse cx="176" cy="340" rx="44" ry="32" transform="rotate(-15,176,340)"/>
+    <!-- Note head 2 -->
+    <ellipse cx="320" cy="308" rx="44" ry="32" transform="rotate(-15,320,308)"/>
+    <!-- Stem 1 -->
+    <rect x="214" y="172" width="14" height="176" rx="7"/>
+    <!-- Stem 2 -->
+    <rect x="358" y="140" width="14" height="176" rx="7"/>
+    <!-- Beam connecting stems -->
+    <rect x="214" y="172" width="158" height="22" rx="11"/>
+  </g>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+</svg>
