@@ -1242,8 +1242,9 @@ function injectSongReviewModal() {
       try {
         const tracks = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=track&limit=10`);
         if (!tracks.length) { results.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:.875rem">No songs found.</div>'; return; }
-        results.innerHTML = tracks.map(t => `
-          <div onclick='selectSongToReview(${JSON.stringify(t).replace(/'/g,"&#39;")})'
+        window._songModalTracks = tracks;
+        results.innerHTML = tracks.map((t, i) => `
+          <div onclick="selectSongToReview(window._songModalTracks[${i}])"
             style="display:flex;align-items:center;gap:12px;padding:10px 4px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s"
             onmouseenter="this.style.background='var(--bg-raised)'" onmouseleave="this.style.background=''">
             <img src="${escHtml(t.artwork)}" style="width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)" alt="">

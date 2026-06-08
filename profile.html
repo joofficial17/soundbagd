@@ -27,7 +27,7 @@
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+      <input type="text" id="searchInput" placeholder="Search albums, songs, artists…" autocomplete="off">
     </div>
     <div class="nav__actions"><!-- injected by app.js --></div>
   </div>
@@ -885,7 +885,8 @@ function renderLists() {
     el.innerHTML = `<div style="color:var(--text-muted);font-size:.9rem;padding:20px 0">${_isOwnProfile ? 'No lists yet — create one with the button above.' : 'No lists yet.'}</div>`;
     return;
   }
-  el.innerHTML = _lists.map(l => `
+  window._listsData = _lists;
+  el.innerHTML = _lists.map((l, li) => `
     <div class="review-card" style="cursor:pointer" onclick="openManageListModal(${l.id})">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
@@ -895,7 +896,7 @@ function renderLists() {
         </div>
         ${_isOwnProfile ? `
         <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
-          <button class="btn btn--ghost btn--sm" onclick="openEditListModal(${l.id},'${escHtml(l.title).replace(/'/g,"\\'")}','${escHtml(l.description||'').replace(/'/g,"\\'")}')">
+          <button class="btn btn--ghost btn--sm" onclick="openEditListModal(window._listsData[${li}].id,window._listsData[${li}].title,window._listsData[${li}].description||'')">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
           <button class="btn btn--ghost btn--sm" style="color:var(--coral)" onclick="deleteList(${l.id})">
@@ -1146,7 +1147,7 @@ function openFollowModal(mode, username) {
     })
     .catch(function(err){
       const body = document.getElementById('followListBody');
-      if (body) body.innerHTML = '<p style="color:#e05c5c;font-size:.875rem;padding:20px 0">Could not load — ' + err.message + '</p>';
+      if (body) body.innerHTML = '<p style="color:#e05c5c;font-size:.875rem;padding:20px 0">Could not load — ' + escHtml(err.message) + '</p>';
     });
 }
 
