@@ -1175,6 +1175,164 @@ function injectNav() {
   auth.updateNav();
 }
 
+// ── Mobile Nav & View Toggle ────────────────────────────────
+
+function injectMobileUI() {
+  // 1. Inject hamburger button into nav
+  const navInner = document.querySelector('.nav__inner');
+  if (navInner && !document.querySelector('.nav__hamburger')) {
+    const burger = document.createElement('button');
+    burger.className = 'nav__hamburger';
+    burger.setAttribute('aria-label', 'Open menu');
+    burger.innerHTML = '<span></span><span></span><span></span>';
+    burger.addEventListener('click', toggleDrawer);
+    navInner.appendChild(burger);
+  }
+
+  // 2. Inject slide-in drawer
+  if (!document.getElementById('navDrawer')) {
+    const page  = window.location.pathname.split('/').pop() || 'index.html';
+    const user  = auth.getUser();
+    const drawerEl = document.createElement('div');
+    drawerEl.className = 'nav__drawer';
+    drawerEl.id = 'navDrawer';
+    drawerEl.innerHTML = `
+      <div class="nav__drawer__backdrop" onclick="closeDrawer()"></div>
+      <div class="nav__drawer__panel">
+        <button class="nav__drawer__close" onclick="closeDrawer()">✕</button>
+        <a href="index.html" class="nav__drawer__logo">Sound<span>bagd</span></a>
+        <ul class="nav__drawer__links" id="drawerLinks">
+          <li><a href="index.html"     ${page==='index.html'     ? 'class="active"':''}>🎵 Explore</a></li>
+          <li><a href="community.html" ${page==='community.html' ? 'class="active"':''}>👥 Community</a></li>
+          <li><a href="ratings.html"   ${page==='ratings.html'   ? 'class="active"':''}>⭐ Ratings</a></li>
+          ${user ? `<li><a href="profile.html?u=${encodeURIComponent(user.username)}" ${page==='profile.html' ? 'class="active"':''}>👤 My Profile</a></li>` : ''}
+          ${user?.role === 'admin' || user?.role === 'mod' ? `<li><a href="admin.html" ${page==='admin.html' ? 'class="active"':''} style="color:var(--gold)">🛡️ Admin</a></li>` : ''}
+        </ul>
+        <hr class="nav__drawer__divider">
+        ${user ? `
+          <div class="nav__drawer__user">
+            <div class="avatar" style="width:36px;height:36px;font-size:.8rem;background:${user.gradient||'linear-gradient(135deg,#d4af37,#7c5cbf)'}">${user.initials||'?'}</div>
+            <div>
+              <div style="font-weight:700;font-size:.875rem">@${escHtml(user.username)}</div>
+              <button onclick="logoutUser()" style="font-size:.75rem;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:0">Sign Out</button>
+            </div>
+          </div>` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button onclick="openAuthModal('login');closeDrawer()" class="btn btn--ghost" style="justify-content:center">Sign In</button>
+            <button onclick="openAuthModal('register');closeDrawer()" class="btn btn--gold" style="justify-content:center">Join Free</button>
+          </div>`}
+      </div>
+    `;
+    document.body.appendChild(drawerEl);
+  }
+
+  // 3. Inject bottom tab bar
+  if (!document.getElementById('mobileTabs')) {
+    const page = window.location.pathname.split('/').pop() || 'index.html';
+    const user = auth.getUser();
+    const tabs = document.createElement('nav');
+    tabs.className = 'mobile-tabs';
+    tabs.id = 'mobileTabs';
+    tabs.innerHTML = `
+      <div class="mobile-tabs__inner">
+        <a href="index.html" class="mobile-tab ${page==='index.html'?'active':''}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+          Explore
+        </a>
+        <a href="community.html" class="mobile-tab ${page==='community.html'?'active':''}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Community
+        </a>
+        <a href="ratings.html" class="mobile-tab ${page==='ratings.html'?'active':''}">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Ratings
+        </a>
+        <a href="${user ? `profile.html?u=${encodeURIComponent(user.username)}` : '#'}"
+           class="mobile-tab ${page==='profile.html'?'active':''}"
+           onclick="${user ? '' : "event.preventDefault();openAuthModal('login')"}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          ${user ? 'Profile' : 'Sign In'}
+        </a>
+      </div>
+    `;
+    document.body.appendChild(tabs);
+  }
+
+  // 4. Inject view toggle button
+  if (!document.getElementById('viewToggle')) {
+    const toggle = document.createElement('button');
+    toggle.id = 'viewToggle';
+    toggle.addEventListener('click', toggleViewMode);
+    document.body.appendChild(toggle);
+    updateToggleLabel();
+  }
+}
+
+function toggleDrawer() {
+  const drawer  = document.getElementById('navDrawer');
+  const burger  = document.querySelector('.nav__hamburger');
+  if (!drawer) return;
+  drawer.classList.toggle('open');
+  burger?.classList.toggle('open');
+  document.body.style.overflow = drawer.classList.contains('open') ? 'hidden' : '';
+}
+function closeDrawer() {
+  const drawer = document.getElementById('navDrawer');
+  const burger = document.querySelector('.nav__hamburger');
+  drawer?.classList.remove('open');
+  burger?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── View mode: 'auto' | 'mobile' | 'desktop' ────────────────
+function getViewMode() {
+  return localStorage.getItem('sb_view') || 'auto';
+}
+
+function applyViewMode(mode) {
+  localStorage.setItem('sb_view', mode);
+  document.body.classList.remove('mobile-view', 'force-desktop');
+  if (mode === 'mobile') {
+    document.body.classList.add('mobile-view');
+    // Narrow the viewport so desktop elements collapse naturally too
+    document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1.0';
+  } else if (mode === 'desktop') {
+    document.body.classList.add('force-desktop');
+    // Fixed-width viewport lets the desktop layout render on phones
+    document.querySelector('meta[name=viewport]').content = 'width=1200, initial-scale=0.4, minimum-scale=0.1, maximum-scale=5';
+  } else {
+    // auto — let media queries decide
+    document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1.0';
+  }
+  updateToggleLabel();
+}
+
+function toggleViewMode() {
+  const current = getViewMode();
+  const isMobileScreen = window.innerWidth <= 768;
+  // Cycle: auto → forced opposite → auto
+  if (current === 'auto') {
+    applyViewMode(isMobileScreen ? 'desktop' : 'mobile');
+  } else {
+    applyViewMode('auto');
+  }
+}
+
+function updateToggleLabel() {
+  const btn  = document.getElementById('viewToggle');
+  if (!btn) return;
+  const mode = getViewMode();
+  const isMobileScreen = window.innerWidth <= 768;
+  if (mode === 'desktop') {
+    btn.innerHTML = '📱 Switch to Mobile View';
+  } else if (mode === 'mobile') {
+    btn.innerHTML = '🖥️ Switch to Desktop View';
+  } else {
+    // auto — show what switching WOULD do
+    btn.innerHTML = isMobileScreen ? '🖥️ Desktop View' : '📱 Mobile View';
+  }
+}
+
 // ── Keyboard shortcuts ──────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -1187,7 +1345,12 @@ document.addEventListener('keydown', (e) => {
 
 // ── Init on load ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply saved view preference before anything renders
+  const savedMode = localStorage.getItem('sb_view');
+  if (savedMode && savedMode !== 'auto') applyViewMode(savedMode);
+
   injectNav();
+  injectMobileUI();
   initSearch();
   if (typeof initPage === 'function') initPage();
 });
