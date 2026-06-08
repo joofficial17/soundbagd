@@ -10,22 +10,86 @@
 
 'use strict';
 
-const express  = require('express');
-const cors     = require('cors');
-const path     = require('path');
-const bcrypt   = require('bcryptjs');
-const jwt      = require('jsonwebtoken');
-const Database = require('better-sqlite3');
-const fetch    = require('node-fetch');
+const express   = require('express');
+const cors      = require('cors');
+const path      = require('path');
+const bcrypt    = require('bcryptjs');
+const jwt       = require('jsonwebtoken');
+const Database  = require('better-sqlite3');
+const fetch     = require('node-fetch');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'soundbagd-dev-secret-change-in-prod';
+const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
-// ── Middleware ─────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
+// ── JWT Secret ─────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (IS_PROD) {
+    console.error('FATAL: JWT_SECRET environment variable is not set. Set it in Railway → Variables.');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: JWT_SECRET not set. Using insecure dev secret — NEVER run this in production without setting JWT_SECRET.');
+  }
+}
+const _JWT_SECRET = JWT_SECRET || 'soundbagd-dev-secret-change-in-prod';
+
+// ── Security Headers (Helmet) ──────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false,   // disabled — we load external images (iTunes, Spotify) and inline scripts
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ── CORS ───────────────────────────────────────────────────
+// In production, only allow requests from our own domain
+const ALLOWED_ORIGINS = [
+  'https://soundbagd.up.railway.app',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow same-origin requests (no Origin header) and known origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
+
+// ── Body size limit ────────────────────────────────────────
+app.use(express.json({ limit: '64kb' }));   // prevent body-bomb attacks
 app.use(express.static(path.join(__dirname)));   // serve HTML/CSS/JS
+
+// ── Rate Limiters ──────────────────────────────────────────
+// Auth endpoints: 10 attempts per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts — please wait 15 minutes and try again.' },
+  skipSuccessfulRequests: true, // only count failures toward the limit
+});
+
+// Write actions (reviews, comments, flags): 30 per minute
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — slow down a bit.' },
+});
+
+// Search / read: 120 per minute
+const readLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please slow down.' },
+});
 
 // ── Database ───────────────────────────────────────────────
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'soundbagd.db');
@@ -411,7 +475,7 @@ function auth(req, res, next) {
   const token = (req.headers.authorization || '').split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(token, _JWT_SECRET);
     // Refresh ban/role status from DB on every authenticated request
     const u = db.prepare('SELECT banned, ban_reason, role FROM users WHERE id=?').get(req.user.id);
     if (u?.banned) return res.status(403).json({ error: `Your account has been suspended${u.ban_reason ? ': ' + u.ban_reason : '.'}`, banned: true });
@@ -439,7 +503,7 @@ function requireAdmin(req, res, next) {
 // ── AUTH ROUTES ────────────────────────────────────────────
 
 // POST /api/auth/register
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   let { username, email, password } = req.body || {};
   if (!username || !email || !password)
     return res.status(400).json({ error: 'Username, email, and password are required' });
@@ -449,10 +513,14 @@ app.post('/api/auth/register', async (req, res) => {
 
   if (username.length < 3)
     return res.status(400).json({ error: 'Username must be at least 3 characters' });
+  if (username.length > 30)
+    return res.status(400).json({ error: 'Username must be 30 characters or fewer' });
   if (!/^[a-z0-9_]+$/.test(username))
     return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
   if (password.length < 6)
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (password.length > 72)
+    return res.status(400).json({ error: 'Password must be 72 characters or fewer' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: 'Please enter a valid email address' });
 
@@ -472,7 +540,7 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (username,email,password_hash,initials,avatar_gradient) VALUES (?,?,?,?,?)'
     ).run(username, email, hash, initials, gradient);
 
-    const token = jwt.sign({ id: result.lastInsertRowid, username, role: 'user' }, JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: result.lastInsertRowid, username, role: 'user' }, _JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: { id: result.lastInsertRowid, username, email, initials, gradient, role: 'user' } });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
@@ -485,8 +553,11 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body || {};
+  // Reject absurdly long inputs before touching the DB or bcrypt
+  if (typeof email    === 'string' && email.length    > 254) return res.status(400).json({ error: 'Invalid email or password' });
+  if (typeof password === 'string' && password.length > 72)  return res.status(400).json({ error: 'Invalid email or password' });
   if (!email || !password)
     return res.status(400).json({ error: 'Email and password required' });
 
@@ -498,7 +569,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   if (user.banned) return res.status(403).json({ error: `Your account has been suspended${user.ban_reason ? ': ' + user.ban_reason : '.'}`, banned: true });
 
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'user' }, _JWT_SECRET, { expiresIn: '30d' });
   res.json({
     token,
     user: { id: user.id, username: user.username, email: user.email, initials: user.initials, gradient: user.avatar_gradient, bio: user.bio, role: user.role || 'user' },
@@ -1127,7 +1198,21 @@ function upsertAlbum({ itunesId, title, artist, artwork, year, genre, mediaType,
 }
 
 // POST /api/reviews
-app.post('/api/reviews', auth, (req, res) => {
+// Validate dsp_url: must be a real http/https URL or empty
+function sanitizeDspUrl(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return trimmed.slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+app.post('/api/reviews', auth, writeLimiter, (req, res) => {
   const { itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl, rating, reviewText, dspUrl, tags } = req.body || {};
 
   if (!title)   return res.status(400).json({ error: 'Album title is required' });
@@ -1137,6 +1222,7 @@ app.post('/api/reviews', auth, (req, res) => {
     return res.status(400).json({ error: 'Rating must be 0.5–5.0 in half-star steps' });
 
   const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
+  const safeDspUrl = sanitizeDspUrl(dspUrl);
 
   try {
     const albumId = upsertAlbum({ itunesId, title, artist, artwork, year, genre, mediaType, trackCount, itunesUrl });
@@ -1149,7 +1235,7 @@ app.post('/api/reviews', auth, (req, res) => {
         dsp_url     = excluded.dsp_url,
         tags        = excluded.tags,
         created_at  = CURRENT_TIMESTAMP
-    `).run(req.user.id, albumId, r, reviewText?.trim() || null, dspUrl?.trim() || null, tagsStr);
+    `).run(req.user.id, albumId, r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr);
 
     res.json({ success: true });
   } catch (err) {
@@ -1167,7 +1253,7 @@ app.delete('/api/reviews/:itunesId', auth, (req, res) => {
 });
 
 // PUT /api/reviews/:itunesId
-app.put('/api/reviews/:itunesId', auth, (req, res) => {
+app.put('/api/reviews/:itunesId', auth, writeLimiter, (req, res) => {
   const { rating, reviewText, dspUrl, tags } = req.body || {};
   const r = Number(rating);
   if (!rating || isNaN(r) || r < 0.5 || r > 5 || (r * 2) % 1 !== 0)
@@ -1177,11 +1263,12 @@ app.put('/api/reviews/:itunesId', auth, (req, res) => {
   if (!album) return res.status(404).json({ error: 'Review not found' });
 
   const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
+  const safeDspUrl = sanitizeDspUrl(dspUrl);
 
   const result = db.prepare(`
     UPDATE reviews SET rating=?, review_text=?, dsp_url=?, tags=?, created_at=CURRENT_TIMESTAMP
     WHERE user_id=? AND album_id=?
-  `).run(r, reviewText?.trim() || null, dspUrl?.trim() || null, tagsStr, req.user.id, album.id);
+  `).run(r, reviewText?.trim()?.slice(0, 4000) || null, safeDspUrl, tagsStr, req.user.id, album.id);
 
   if (!result.changes) return res.status(404).json({ error: 'Review not found' });
   res.json({ success: true });
@@ -1196,7 +1283,7 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
   let currentUserId = null;
   try {
     const token = (req.headers.authorization || '').split(' ')[1];
-    if (token) { const decoded = require('jsonwebtoken').verify(token, JWT_SECRET); currentUserId = decoded.id; }
+    if (token) { const decoded = jwt.verify(token, _JWT_SECRET); currentUserId = decoded.id; }
   } catch {}
 
   const reviews = db.prepare(`
@@ -1291,7 +1378,7 @@ app.get('/api/reviews/panned', (req, res) => {
 });
 
 // GET /api/users/search?q=username&limit=20
-app.get('/api/users/search', (req, res) => {
+app.get('/api/users/search', readLimiter, (req, res) => {
   const q     = (req.query.q || '').trim().toLowerCase();
   const limit = Math.min(Number(req.query.limit) || 20, 50);
   const viewerId = req.query.viewer ? Number(req.query.viewer) : null;
@@ -1351,7 +1438,7 @@ app.get('/api/users/:username', (req, res) => {
   try {
     const token = (req.headers.authorization || '').split(' ')[1];
     if (token) {
-      const decoded = require('jsonwebtoken').verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, _JWT_SECRET);
       isFollowing = !!db.prepare('SELECT 1 FROM follows WHERE follower_id=? AND following_id=?').get(decoded.id, u.id);
     }
   } catch {}
@@ -1641,7 +1728,7 @@ app.get('/api/reviews/:id/comments', (req, res) => {
 });
 
 // POST /api/reviews/:id/comments
-app.post('/api/reviews/:id/comments', auth, (req, res) => {
+app.post('/api/reviews/:id/comments', auth, writeLimiter, (req, res) => {
   const { text } = req.body || {};
   if (!text?.trim()) return res.status(400).json({ error: 'Comment text required' });
   if (text.trim().length > 1000) return res.status(400).json({ error: 'Comment too long (max 1000 characters)' });
@@ -1822,7 +1909,7 @@ app.get('/api/stats', (req, res) => {
 // ── FLAG ROUTES ────────────────────────────────────────────
 
 // POST /api/reviews/:id/flag  — any logged-in user can flag a review
-app.post('/api/reviews/:id/flag', auth, (req, res) => {
+app.post('/api/reviews/:id/flag', auth, writeLimiter, (req, res) => {
   const reviewId = Number(req.params.id);
   const review = db.prepare('SELECT id, user_id FROM reviews WHERE id=?').get(reviewId);
   if (!review) return res.status(404).json({ error: 'Review not found' });
