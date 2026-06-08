@@ -61,7 +61,7 @@ const auth = {
         profile.style.display = 'flex';
         const av = profile.querySelector('.nav-avatar');
         if (av) {
-          av.textContent    = user.initials || user.username.slice(0,2).toUpperCase();
+          av.textContent      = user.initials || user.username.slice(0,2).toUpperCase();
           av.style.background = user.gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)';
         }
         const name = profile.querySelector('.nav-username');
@@ -76,12 +76,30 @@ const auth = {
           navLinks.appendChild(li);
         }
       }
+      // Swap hero "Start Your Journey" → "Browse Music to Review" when logged in
+      const heroBtn = document.getElementById('heroMainBtn');
+      if (heroBtn) {
+        heroBtn.href = '#trending';
+        heroBtn.removeAttribute('onclick');
+        heroBtn.innerHTML =
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18V5l12-2v13"/><circle cx="7" cy="18" r="2"/><circle cx="19" cy="16" r="2"/></svg>'
+          + ' Browse Music';
+      }
     } else {
       if (signIn)  signIn.style.display  = '';
       if (join)    join.style.display    = '';
       if (profile) profile.style.display = 'none';
       // Remove admin link if logged out
       document.getElementById('navAdminLink')?.parentElement?.remove();
+      // Restore hero button to sign-up state
+      const heroBtn = document.getElementById('heroMainBtn');
+      if (heroBtn) {
+        heroBtn.href = '#';
+        heroBtn.setAttribute('onclick', "event.preventDefault();openAuthModal('register')");
+        heroBtn.innerHTML =
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>'
+          + ' Start Your Journey';
+      }
     }
   },
 };
