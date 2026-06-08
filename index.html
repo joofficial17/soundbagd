@@ -24,12 +24,10 @@
       <li><a href="index.html" class="active">Explore</a></li>
       <li><a href="community.html">Community</a></li>
       <li><a href="ratings.html">Ratings</a></li>
-      <li><a href="#" onclick="event.preventDefault();openDspModal()">Add Music</a></li>
-      <li><a href="#" onclick="event.preventDefault();openSongReviewModal()">Review a Song</a></li>
     </ul>
     <div class="nav__search">
       <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="searchInput" placeholder="Search albums, artists…" autocomplete="off">
+      <input type="text" id="searchInput" placeholder="Search albums, songs, artists…" autocomplete="off">
     </div>
     <div class="nav__actions"><!-- injected by app.js --></div>
   </div>
@@ -74,7 +72,7 @@
 <div id="mobileSearchBar" style="display:none;padding:12px 16px;background:var(--bg-card);border-bottom:1px solid var(--border)">
   <div style="position:relative;max-width:600px;margin:0 auto">
     <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    <input type="text" id="mobileSearchInput" placeholder="Search albums, artists…" autocomplete="off"
+    <input type="text" id="mobileSearchInput" placeholder="Search albums, songs, artists…" autocomplete="off"
       style="width:100%;padding:11px 16px 11px 42px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);font-size:.95rem;outline:none;box-sizing:border-box"
       onfocus="this.style.borderColor='var(--gold)';this.style.boxShadow='0 0 0 3px rgba(212,175,55,.18)'"
       onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
@@ -157,15 +155,6 @@
           </div>
         </div>
 
-        <!-- Add via DSP link (hidden on mobile — accessible via hamburger) -->
-        <div class="sidebar-import-box" style="margin-top:28px;padding:20px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-lg)">
-          <div style="font-size:1.2rem;margin-bottom:8px">🔗</div>
-          <div style="font-weight:600;margin-bottom:6px;font-size:.9rem">Can't find an album?</div>
-          <div class="text-sm muted" style="margin-bottom:14px;line-height:1.6">Import it from Spotify, Apple Music, TIDAL, YouTube Music, or Amazon.</div>
-          <button class="btn btn--ghost btn--sm" onclick="openDspModal()" style="width:100%;justify-content:center">
-            Import via Streaming Link
-          </button>
-        </div>
       </aside>
     </div>
   </div>
@@ -193,20 +182,43 @@
 
 <!-- ── CTA ─────────────────────────────────────────────────── -->
 <section class="section">
-  <div class="container--narrow">
-    <div style="text-align:center;padding:48px 32px;background:linear-gradient(135deg,var(--bg-card),var(--bg-raised));border:1px solid var(--border-md);border-radius:var(--radius-xl);box-shadow:var(--shadow-glow)">
-      <div style="font-size:2.5rem;margin-bottom:16px">🎧</div>
-      <h2 class="h2" style="margin-bottom:12px">Your music story<br><em class="serif" style="color:var(--gold)">starts here.</em></h2>
-      <p class="muted" style="margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
-        Create a free account to log every album you've heard, build your Top 5 lists, and share your taste.
-      </p>
-      <a href="#" class="btn btn--gold" onclick="event.preventDefault();openAuthModal('register')">
-        Create Your Free Account
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </a>
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px" class="cta-grid">
+
+      <!-- Sign up card -->
+      <div style="text-align:center;padding:48px 32px;background:linear-gradient(135deg,var(--bg-card),var(--bg-raised));border:1px solid var(--border-md);border-radius:var(--radius-xl);box-shadow:var(--shadow-glow)">
+        <div style="font-size:2.5rem;margin-bottom:16px">🎧</div>
+        <h2 class="h2" style="margin-bottom:12px">Your music story<br><em class="serif" style="color:var(--gold)">starts here.</em></h2>
+        <p class="muted" style="margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
+          Create a free account to log every album you've heard, build your Top 5 lists, and share your taste.
+        </p>
+        <a href="#" class="btn btn--gold" onclick="event.preventDefault();openAuthModal('register')">
+          Create Your Free Account
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+      <!-- Add music card -->
+      <div style="text-align:center;padding:48px 32px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl)">
+        <div style="font-size:2.5rem;margin-bottom:16px">🔍</div>
+        <h2 class="h2" style="margin-bottom:12px">Can't find what<br><em class="serif" style="color:var(--gold)">you're looking for?</em></h2>
+        <p class="muted" style="margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
+          Import any album, EP, or song directly from Spotify, Apple Music, TIDAL, YouTube Music, or Amazon Music.
+        </p>
+        <button class="btn btn--ghost" onclick="openDspModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Add via Streaming Link
+        </button>
+      </div>
+
     </div>
   </div>
 </section>
+
+<style>
+  @media (max-width: 768px) { body:not(.force-desktop) .cta-grid { grid-template-columns: 1fr !important; } }
+  body.mobile-view .cta-grid { grid-template-columns: 1fr !important; }
+</style>
 
 <!-- ── Footer ─────────────────────────────────────────────── -->
 <footer class="footer">

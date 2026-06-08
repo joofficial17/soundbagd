@@ -1142,33 +1142,60 @@ async function runSearch(q, dropdown) {
   dropdown.innerHTML = `<div style="padding:16px;color:var(--text-muted);font-size:.875rem">Searching…</div>`;
   dropdown.style.display = '';
   try {
-    const results = await api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=album&limit=8`);
-    if (!results.length) {
+    // Fetch albums and songs in parallel
+    const [albumRes, trackRes] = await Promise.allSettled([
+      api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=album&limit=5`),
+      api.get(`/api/music/search?q=${encodeURIComponent(q)}&type=track&limit=5`),
+    ]);
+    const albums = albumRes.status === 'fulfilled' ? albumRes.value : [];
+    const tracks = trackRes.status === 'fulfilled' ? trackRes.value : [];
+
+    if (!albums.length && !tracks.length) {
       dropdown.innerHTML = `
         <div style="padding:14px 16px">
-          <div style="font-size:.875rem;color:var(--text-muted);margin-bottom:10px">No albums found for "<strong style="color:var(--text)">${escHtml(q)}</strong>"</div>
-          <button class="btn btn--ghost btn--sm" onclick="openDspModal();document.getElementById('searchDropdown').style.display='none'">
-            Import via streaming link instead
-          </button>
+          <div style="font-size:.875rem;color:var(--text-muted);margin-bottom:10px">Nothing found for "<strong style="color:var(--text)">${escHtml(q)}</strong>"</div>
+          <div style="font-size:.8rem;color:var(--text-muted)">Can't find it? <a href="#" style="color:var(--gold)" onclick="event.preventDefault();this.closest('[id]').style.display='none';openDspModal()">Add it via streaming link ↓</a></div>
         </div>`;
       return;
     }
-    dropdown.innerHTML = results.map(a => `
-      <div onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}'"
-        style="display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;transition:background .15s"
-        onmouseenter="this.style.background='var(--bg-raised)'" onmouseleave="this.style.background=''">
-        <img src="${escHtml(a.artwork)}" alt="" style="width:42px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.title)}</div>
-          <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(a.artist)} · ${a.year || ''}</div>
-        </div>
-        <span class="tag" style="font-size:.65rem;flex-shrink:0">${escHtml(a.mediaType || 'Album')}</span>
-      </div>`).join('') +
-      `<div style="padding:10px 14px;border-top:1px solid var(--border)">
-        <button class="btn btn--ghost btn--sm" style="font-size:.75rem" onclick="openDspModal();document.getElementById('searchDropdown').style.display='none'">
-          + Add via streaming link
-        </button>
-      </div>`;
+
+    let html = '';
+
+    if (albums.length) {
+      html += `<div style="padding:6px 14px 4px;font-size:.7rem;font-weight:700;letter-spacing:.07em;color:var(--text-muted);text-transform:uppercase">Albums &amp; EPs</div>`;
+      html += albums.map(a => `
+        <div onclick="location.href='album.html?id=${encodeURIComponent(a.itunesId)}';document.getElementById('${dropdown.id}').style.display='none'"
+          style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;transition:background .15s"
+          onmouseenter="this.style.background='var(--bg-raised)'" onmouseleave="this.style.background=''">
+          <img src="${escHtml(a.artwork)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.title)}</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(a.artist)}${a.year ? ' · ' + a.year : ''}</div>
+          </div>
+          <span class="tag" style="font-size:.65rem;flex-shrink:0">${escHtml(a.mediaType || 'Album')}</span>
+        </div>`).join('');
+    }
+
+    if (tracks.length) {
+      html += `<div style="padding:6px 14px 4px;font-size:.7rem;font-weight:700;letter-spacing:.07em;color:var(--text-muted);text-transform:uppercase;border-top:${albums.length ? '1px solid var(--border)' : 'none'};margin-top:${albums.length ? '4px' : '0'}">Songs</div>`;
+      // Normalize track objects for the review modal (ensure mediaType is set)
+      tracks.forEach(t => { t.mediaType = t.mediaType || 'Song'; });
+      // Store tracks for onclick (avoid single-quote escaping issues with apostrophes)
+      window._searchTracks = tracks;
+      html += tracks.map((t, i) => `
+        <div onclick="document.getElementById('${dropdown.id}').style.display='none';openReviewModal(window._searchTracks[${i}])"
+          style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;transition:background .15s"
+          onmouseenter="this.style.background='var(--bg-raised)'" onmouseleave="this.style.background=''">
+          <img src="${escHtml(t.artwork)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-raised)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.title)}</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(t.artist)}${t.album ? ' · ' + escHtml(t.album) : ''}</div>
+          </div>
+          <span class="tag" style="font-size:.65rem;flex-shrink:0;color:var(--gold);border-color:var(--gold)">Song</span>
+        </div>`).join('');
+    }
+
+    dropdown.innerHTML = html;
   } catch {
     dropdown.innerHTML = `<div style="padding:14px;color:var(--text-muted);font-size:.875rem">Search unavailable — is the server running?</div>`;
   }
@@ -1322,8 +1349,7 @@ function injectMobileUI() {
         </ul>
         <hr class="nav__drawer__divider">
         <ul class="nav__drawer__links" style="margin-bottom:0">
-          <li><a href="#" onclick="event.preventDefault();closeDrawer();openDspModal()">🔗 Import Music</a></li>
-          <li><a href="#" onclick="event.preventDefault();closeDrawer();openSongReviewModal()">🎤 Review a Song</a></li>
+          <li><a href="#" onclick="event.preventDefault();closeDrawer();openDspModal()">🔍 Can't find it? Add Music</a></li>
         </ul>
         <hr class="nav__drawer__divider">
         ${user ? `
