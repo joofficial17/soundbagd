@@ -1237,6 +1237,11 @@ function injectMobileUI() {
           ${user?.role === 'admin' || user?.role === 'mod' ? `<li><a href="admin.html" ${page==='admin.html' ? 'class="active"':''} style="color:var(--gold)">🛡️ Admin</a></li>` : ''}
         </ul>
         <hr class="nav__drawer__divider">
+        <ul class="nav__drawer__links" style="margin-bottom:0">
+          <li><a href="#" onclick="event.preventDefault();closeDrawer();openDspModal()">🔗 Import Music</a></li>
+          <li><a href="#" onclick="event.preventDefault();closeDrawer();openSongReviewModal()">🎤 Review a Song</a></li>
+        </ul>
+        <hr class="nav__drawer__divider">
         ${user ? `
           <div class="nav__drawer__user">
             <div class="avatar" style="width:36px;height:36px;font-size:.8rem;background:${user.gradient||'linear-gradient(135deg,#d4af37,#7c5cbf)'}">${user.initials||'?'}</div>

@@ -973,6 +973,71 @@ body.mobile-view { --mobile: 1; }
   body:not(.force-desktop) .section { padding: 32px 0; }
   body:not(.force-desktop) .section__header { flex-direction: column; gap: 8px; }
 
+  /* ── Main grid: stack sidebar below feed ─── */
+  body:not(.force-desktop) .main-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+  /* Aside becomes a compact strip below the review feed */
+  body:not(.force-desktop) .main-grid aside {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    margin-top: 4px;
+  }
+  /* "Most Streamed Today" — horizontal scroll card strip */
+  body:not(.force-desktop) #popularList {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  body:not(.force-desktop) #popularList::-webkit-scrollbar { display: none; }
+  body:not(.force-desktop) #popularList .top5-item {
+    flex: 0 0 auto;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    width: 110px;
+    padding: 0 !important;
+    background: none;
+    cursor: pointer;
+  }
+  body:not(.force-desktop) #popularList .top5-item__num { display: none; }
+  body:not(.force-desktop) #popularList .top5-item__art {
+    width: 110px !important;
+    height: 110px !important;
+    border-radius: var(--radius-md);
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  body:not(.force-desktop) #popularList .top5-item__info { width: 100%; }
+  body:not(.force-desktop) #popularList .top5-item__title { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body:not(.force-desktop) #popularList .top5-item__sub  { font-size: .65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Hide import box on mobile — accessible from hamburger menu */
+  body:not(.force-desktop) .sidebar-import-box { display: none !important; }
+
+  /* Tighten trending strip on mobile — 2 rows only */
+  body:not(.force-desktop) .trending-strip {
+    grid-template-rows: repeat(2, auto);
+    grid-auto-columns: 130px;
+    gap: 10px;
+  }
+
+  /* Compact hero on mobile */
+  body:not(.force-desktop) .hero { padding: 28px 0 20px; }
+  body:not(.force-desktop) .hero__title { font-size: 1.75rem; line-height: 1.2; }
+  body:not(.force-desktop) .hero__sub { display: none; }
+  body:not(.force-desktop) .hero__cta { gap: 10px; }
+  body:not(.force-desktop) .stats-row { margin-top: 24px !important; padding-top: 20px !important; gap: 12px; }
+  body:not(.force-desktop) .stat__value { font-size: 1.4rem; }
+  body:not(.force-desktop) .stat__label { font-size: .65rem; }
+
   /* Top-5 items */
   body:not(.force-desktop) .top5-item { padding: 10px 12px; gap: 10px; }
   body:not(.force-desktop) .top5-item__num { font-size: 1.2rem; min-width: 22px; }
@@ -1023,6 +1088,25 @@ body.mobile-view .modal { max-width: 100%; border-radius: var(--radius-xl) var(-
 body.mobile-view .modal-backdrop.open .modal { transform: translateY(0); }
 body.mobile-view .section { padding: 32px 0; }
 body.mobile-view .section__header { flex-direction: column; gap: 8px; }
+body.mobile-view .main-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
+body.mobile-view .main-grid aside { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 4px; }
+body.mobile-view #popularList { display: flex !important; flex-direction: row !important; gap: 10px; overflow-x: auto; padding-bottom: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+body.mobile-view #popularList::-webkit-scrollbar { display: none; }
+body.mobile-view #popularList .top5-item { flex: 0 0 auto; flex-direction: column !important; align-items: flex-start !important; width: 110px; padding: 0 !important; background: none; cursor: pointer; }
+body.mobile-view #popularList .top5-item__num { display: none; }
+body.mobile-view #popularList .top5-item__art { width: 110px !important; height: 110px !important; border-radius: var(--radius-md); margin-bottom: 6px; flex-shrink: 0; }
+body.mobile-view #popularList .top5-item__info { width: 100%; }
+body.mobile-view #popularList .top5-item__title { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mobile-view #popularList .top5-item__sub  { font-size: .65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mobile-view .sidebar-import-box { display: none !important; }
+body.mobile-view .trending-strip { grid-template-rows: repeat(2, auto); grid-auto-columns: 130px; gap: 10px; }
+body.mobile-view .hero { padding: 28px 0 20px; }
+body.mobile-view .hero__title { font-size: 1.75rem; line-height: 1.2; }
+body.mobile-view .hero__sub { display: none; }
+body.mobile-view .hero__cta { gap: 10px; }
+body.mobile-view .stats-row { margin-top: 24px !important; padding-top: 20px !important; gap: 12px; }
+body.mobile-view .stat__value { font-size: 1.4rem; }
+body.mobile-view .stat__label { font-size: .65rem; }
 body.mobile-view .top5-item { padding: 10px 12px; gap: 10px; }
 body.mobile-view .top5-item__num { font-size: 1.2rem; min-width: 22px; }
 body.mobile-view .top5-item__art { width: 36px; height: 36px; }
