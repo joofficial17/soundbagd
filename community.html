@@ -74,8 +74,8 @@
     <span class="text-xs muted" id="resultsCount"></span>
   </div>
 
+  <!-- Single container — JS writes loading skeletons, results, or empty state into here -->
   <div id="userGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
-    <!-- populated by JS -->
   </div>
 
   <div id="emptyState" style="display:none;text-align:center;padding:60px 0">
@@ -84,7 +84,8 @@
     <p class="muted">Try a different username.</p>
   </div>
 
-  <div id="loadingState" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+  <!-- Hidden — skeletons are injected into userGrid by JS instead -->
+  <div id="loadingState" style="display:none;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
@@ -119,31 +120,43 @@ function onSearchInput(val) {
   _searchTimeout = setTimeout(() => loadUsers(val.trim()), 300);
 }
 
+function skeletonCard() {
+  return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div>
+      </div>
+    </div>
+    <div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div>
+  </div>`;
+}
+
 async function loadUsers(q) {
-  document.getElementById('userGrid').innerHTML = '';
+  const grid = document.getElementById('userGrid');
   document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('loadingState').style.display = 'grid';
   document.getElementById('resultsLabel').textContent = q ? `Results for "${q}"` : 'All Members';
   document.getElementById('resultsCount').textContent = '';
+
+  // Show skeletons inline in the grid
+  grid.innerHTML = Array.from({length: 8}, skeletonCard).join('');
 
   try {
     const params = new URLSearchParams({ q, limit: 50 });
     if (_currentUser) params.set('viewer', _currentUser.id);
     const users = await api.get('/api/users/search?' + params.toString());
 
-    document.getElementById('loadingState').style.display = 'none';
-
     if (!users.length) {
+      grid.innerHTML = '';
       document.getElementById('emptyState').style.display = '';
       return;
     }
 
     document.getElementById('resultsCount').textContent = `${users.length} member${users.length !== 1 ? 's' : ''}`;
-    document.getElementById('userGrid').innerHTML = users.map(u => userCardHtml(u)).join('');
-  } catch {
-    document.getElementById('loadingState').style.display = 'none';
-    document.getElementById('userGrid').innerHTML =
-      '<div style="color:var(--text-muted);font-size:.875rem">Could not load members.</div>';
+    grid.innerHTML = users.map(u => userCardHtml(u)).join('');
+  } catch (err) {
+    grid.innerHTML = `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load members — ${err.message}</div>`;
   }
 }
 

@@ -1270,6 +1270,7 @@ app.get('/api/users/search', (req, res) => {
            (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) AS follower_count
     FROM users u
     WHERE u.username LIKE ?
+      AND (u.banned IS NULL OR u.banned = 0)
     ORDER BY review_count DESC, u.created_at ASC
     LIMIT ?
   `).all(`%${q}%`, limit);
