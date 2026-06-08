@@ -269,6 +269,25 @@ const SETUP_SECRET = process.env.SPOTIFY_SETUP_SECRET || 'soundbagd-setup-2026';
 
 const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://soundbagd.up.railway.app/spotify-callback';
 
+// One-time admin promotion route — protected by setup secret
+// Usage: /make-admin?secret=soundbagd-setup-2026&username=yourname
+app.get('/make-admin', (req, res) => {
+  if (req.query.secret !== SETUP_SECRET) return res.status(403).send('Forbidden — wrong secret.');
+  const username = (req.query.username || '').trim().toLowerCase();
+  if (!username) return res.status(400).send('Missing ?username= parameter.');
+  const user = db.prepare('SELECT id, username, role FROM users WHERE username=?').get(username);
+  if (!user) return res.status(404).send(`User "${username}" not found. Make sure you've created your account first.`);
+  db.prepare('UPDATE users SET role=? WHERE id=?').run('admin', user.id);
+  res.send(`
+    <div style="font-family:sans-serif;padding:48px;max-width:480px;margin:0 auto">
+      <h2 style="color:#d4af37">✅ Done!</h2>
+      <p><strong>@${user.username}</strong> is now an <strong>Admin</strong>.</p>
+      <p style="color:#888;font-size:.9rem">Log out and back in on Soundbagd — the 🛡️ Admin link will appear in your nav.</p>
+      <a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#d4af37;color:#000;border-radius:6px;text-decoration:none;font-weight:700">Go to Soundbagd</a>
+    </div>
+  `);
+});
+
 // Step 1 — redirect owner to Spotify login
 app.get('/spotify-setup', (req, res) => {
   if (req.query.secret !== SETUP_SECRET) return res.status(403).send('Forbidden');
