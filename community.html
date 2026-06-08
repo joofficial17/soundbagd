@@ -34,14 +34,10 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Reviewers
         </div>
-        <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.4rem);margin-bottom:8px">
-          Find <em>your people.</em>
-        </h1>
-        <p class="hero__sub" style="font-size:.9rem;max-width:480px">
-          Search for reviewers by username, discover new voices, and follow the people whose taste matches yours.
-        </p>
+        <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.4rem);margin-bottom:8px">Find <em>your people.</em></h1>
+        <p class="hero__sub" style="font-size:.9rem;max-width:480px">Search for members by username, discover new voices, and follow the people whose taste matches yours.</p>
       </div>
-      <div id="communityStats" style="display:flex;gap:32px;text-align:center">
+      <div style="display:flex;gap:32px;text-align:center">
         <div>
           <div style="font-size:1.8rem;font-weight:800;color:var(--gold)" id="statMembers">—</div>
           <div class="text-xs muted" style="letter-spacing:.06em;text-transform:uppercase">Members</div>
@@ -55,10 +51,7 @@
 
     <!-- Search bar -->
     <div style="margin-top:28px;max-width:520px;position:relative">
-      <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"
-        width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-      </svg>
+      <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input id="userSearchInput" type="text" placeholder="Search by username…" autocomplete="off"
         style="width:100%;box-sizing:border-box;padding:12px 16px 12px 42px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);font-size:.95rem;outline:none;transition:var(--transition)"
         oninput="onSearchInput(this.value)"
@@ -67,172 +60,154 @@
   </div>
 </section>
 
-<!-- User grid -->
-<div class="container" style="padding-top:40px;padding-bottom:80px">
+<!-- Member list -->
+<div class="container" style="padding-top:40px;padding-bottom:100px">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
     <h2 class="h4" id="resultsLabel">All Members</h2>
     <span class="text-xs muted" id="resultsCount"></span>
   </div>
-
-  <!-- Single container — JS writes loading skeletons, results, or empty state into here -->
-  <div id="userGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
-  </div>
-
-  <div id="emptyState" style="display:none;text-align:center;padding:60px 0">
-    <div style="font-size:3rem;margin-bottom:16px">🔍</div>
-    <h2 class="h4" style="margin-bottom:8px">No members found</h2>
-    <p class="muted">Try a different username.</p>
-  </div>
-
-  <!-- Hidden — skeletons are injected into userGrid by JS instead -->
-  <div id="loadingState" style="display:none;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div><div style="flex:1"><div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div><div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div></div></div><div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div></div>
-  </div>
+  <div id="memberList"></div>
 </div>
 
 <script src="app.js"></script>
 <script>
-let _searchTimeout = null;
-let _currentUser   = null;
+var _searchTimer = null;
+var _me = null;
 
 async function initPage() {
-  _currentUser = auth.getUser();
+  _me = auth.getUser();
 
-  // Load site stats
-  try {
-    const stats = await api.get('/api/stats');
-    document.getElementById('statMembers').textContent = (stats.members ?? 0).toLocaleString();
-    document.getElementById('statReviews').textContent = (stats.reviews ?? 0).toLocaleString();
-  } catch (e) {
-    console.error('Stats failed:', e.message);
-    document.getElementById('statMembers').textContent = '?';
-    document.getElementById('statReviews').textContent = '?';
-  }
+  // Stats
+  fetch('/api/stats').then(function(r){ return r.json(); }).then(function(s){
+    document.getElementById('statMembers').textContent = s.members || 0;
+    document.getElementById('statReviews').textContent = s.reviews || 0;
+  }).catch(function(){});
 
   loadUsers('');
 }
 
 function onSearchInput(val) {
-  clearTimeout(_searchTimeout);
-  _searchTimeout = setTimeout(() => loadUsers(val.trim()), 300);
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function(){ loadUsers(val.trim()); }, 300);
 }
 
-function skeletonCard() {
-  return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div>
-      <div style="flex:1">
-        <div style="height:14px;background:var(--bg-raised);border-radius:4px;margin-bottom:6px;animation:pulse 1.5s ease infinite"></div>
-        <div style="height:11px;background:var(--bg-raised);border-radius:4px;width:60%;animation:pulse 1.5s ease infinite"></div>
-      </div>
-    </div>
-    <div style="height:32px;background:var(--bg-raised);border-radius:var(--radius-sm);animation:pulse 1.5s ease infinite"></div>
-  </div>`;
-}
+function loadUsers(q) {
+  var list = document.getElementById('memberList');
+  var label = document.getElementById('resultsLabel');
+  var count = document.getElementById('resultsCount');
 
-async function loadUsers(q) {
-  const grid = document.getElementById('userGrid');
-  const empty = document.getElementById('emptyState');
-  const label = document.getElementById('resultsLabel');
-  const count = document.getElementById('resultsCount');
-
-  empty.style.display = 'none';
   label.textContent = q ? 'Results for "' + q + '"' : 'All Members';
   count.textContent = '';
-  grid.innerHTML = Array.from({length: 8}, skeletonCard).join('');
+  list.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;padding:12px 0">Loading…</p>';
 
-  try {
-    const url = '/api/users/search?q=' + encodeURIComponent(q || '') + '&limit=50' +
-                (_currentUser ? '&viewer=' + _currentUser.id : '');
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('Server returned ' + resp.status);
-    const users = await resp.json();
+  var url = '/api/users/search?q=' + encodeURIComponent(q) + '&limit=50';
+  if (_me) url += '&viewer=' + _me.id;
 
-    if (!Array.isArray(users) || !users.length) {
-      grid.innerHTML = '';
-      empty.style.display = '';
-      return;
-    }
-
-    count.textContent = users.length + ' member' + (users.length !== 1 ? 's' : '');
-    grid.innerHTML = '';
-    users.forEach(function(u) {
-      try {
-        const card = document.createElement('div');
-        card.innerHTML = userCardHtml(u);
-        grid.appendChild(card.firstElementChild);
-      } catch (cardErr) {
-        console.error('Card error for', u.username, cardErr);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(users) {
+      if (!users || !users.length) {
+        list.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;padding:40px 0;text-align:center">No members found.</p>';
+        return;
       }
+      count.textContent = users.length + ' member' + (users.length !== 1 ? 's' : '');
+      list.innerHTML = '';
+      users.forEach(function(u) {
+        list.appendChild(makeCard(u));
+      });
+    })
+    .catch(function(err) {
+      list.innerHTML = '<p style="color:#e05c5c;font-size:.875rem;padding:12px 0">Error loading members: ' + err.message + '</p>';
     });
-  } catch (err) {
-    console.error('loadUsers error:', err);
-    grid.innerHTML = '<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Could not load members — ' + err.message + '</div>';
-  }
 }
 
-function userCardHtml(u) {
-  const isMe     = _currentUser && _currentUser.username === u.username;
-  const joinDate = new Date(u.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const initials = (u.initials || u.username.slice(0, 2)).toUpperCase();
-  const gradient = u.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)';
-  const profileUrl = 'profile.html?u=' + encodeURIComponent(u.username);
+function makeCard(u) {
+  var profileUrl = 'profile.html?u=' + encodeURIComponent(u.username);
+  var initials   = (u.initials || u.username.slice(0,2)).toUpperCase();
+  var gradient   = u.avatar_gradient || 'linear-gradient(135deg,#d4af37,#7c5cbf)';
+  var joinDate   = new Date(u.created_at).toLocaleDateString('en-US', {month:'long', year:'numeric'});
+  var isMe       = _me && _me.username === u.username;
 
-  // Build follow button HTML safely
-  var followBtn = '';
-  if (!isMe && _currentUser) {
-    var btnClass = u.isFollowing ? 'btn btn--gold btn--sm' : 'btn btn--ghost btn--sm';
-    var btnLabel = u.isFollowing ? '&#10003; Following' : '+ Follow';
-    followBtn = '<button class="' + btnClass + '" id="follow-btn-' + u.id + '" style="flex:1" onclick="toggleFollowCard(' + u.id + ',\'' + u.username.replace(/'/g,"\\'") + '\',this)">' + btnLabel + '</button>';
-  } else if (!_currentUser) {
-    followBtn = '<button class="btn btn--ghost btn--sm" style="flex:1" onclick="openAuthModal(\'login\')">Follow</button>';
+  // Outer card
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:12px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:border-color .2s';
+  card.onmouseover = function(){ card.style.borderColor = 'var(--gold)'; };
+  card.onmouseout  = function(){ card.style.borderColor = 'var(--border)'; };
+  card.onclick = function(){ location.href = profileUrl; };
+
+  // Avatar
+  var av = document.createElement('div');
+  av.style.cssText = 'width:52px;height:52px;border-radius:50%;background:' + gradient + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem;color:#fff;flex-shrink:0';
+  av.textContent = initials;
+  card.appendChild(av);
+
+  // Info block
+  var info = document.createElement('div');
+  info.style.cssText = 'flex:1;min-width:0';
+
+  var nameEl = document.createElement('div');
+  nameEl.style.cssText = 'font-weight:700;font-size:.95rem;margin-bottom:2px';
+  nameEl.textContent = '@' + u.username;
+  info.appendChild(nameEl);
+
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:4px';
+  meta.textContent = 'Joined ' + joinDate + ' · ' + (u.review_count || 0) + ' review' + (u.review_count !== 1 ? 's' : '') + ' · ' + (u.follower_count || 0) + ' follower' + (u.follower_count !== 1 ? 's' : '');
+  info.appendChild(meta);
+
+  if (u.bio) {
+    var bio = document.createElement('div');
+    bio.style.cssText = 'font-size:.8rem;color:var(--text-muted);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    bio.textContent = '“' + u.bio + '”';
+    info.appendChild(bio);
   }
 
-  var bioHtml = u.bio ? '<div style="font-size:.8rem;color:var(--text-muted);font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml('"' + u.bio + '"') + '</div>' : '';
+  card.appendChild(info);
 
-  return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;display:flex;flex-direction:column;gap:14px;cursor:pointer" onclick="location.href=\'' + profileUrl + '\'">'
-    + '<div style="display:flex;align-items:center;gap:12px">'
-    +   '<div style="width:48px;height:48px;border-radius:50%;background:' + gradient + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#fff;flex-shrink:0">' + escHtml(initials) + '</div>'
-    +   '<div style="min-width:0">'
-    +     '<div style="font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@' + escHtml(u.username) + '</div>'
-    +     '<div style="font-size:.75rem;color:var(--text-muted)">Joined ' + joinDate + '</div>'
-    +   '</div>'
-    + '</div>'
-    + '<div style="display:flex;gap:20px;align-items:center">'
-    +   '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--gold)">' + (u.review_count || 0) + '</div><div style="font-size:.72rem;color:var(--text-muted)">Reviews</div></div>'
-    +   '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--gold)">' + (u.follower_count || 0) + '</div><div style="font-size:.72rem;color:var(--text-muted)">Followers</div></div>'
-    +   bioHtml
-    + '</div>'
-    + '<div style="display:flex;gap:8px" onclick="event.stopPropagation()">'
-    +   '<a href="' + profileUrl + '" class="btn btn--ghost btn--sm" style="flex:1;justify-content:center">View Profile</a>'
-    +   followBtn
-    + '</div>'
-    + '</div>';
-}
+  // Follow / View button
+  var btnWrap = document.createElement('div');
+  btnWrap.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+  btnWrap.onclick = function(e){ e.stopPropagation(); };
 
-async function toggleFollowCard(userId, username, btn) {
-  if (!_currentUser) { openAuthModal('login'); return; }
-  const isFollowing = btn.classList.contains('btn--gold');
-  try {
-    if (isFollowing) {
-      await api.delete(`/api/users/${encodeURIComponent(username)}/follow`);
-      btn.classList.remove('btn--gold'); btn.classList.add('btn--ghost');
-      btn.textContent = '+ Follow';
+  if (!isMe) {
+    var followBtn = document.createElement('button');
+    followBtn.style.cssText = 'padding:7px 16px;border-radius:40px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap';
+    if (u.isFollowing) {
+      followBtn.textContent = '✓ Following';
+      followBtn.style.cssText += ';background:var(--gold);color:#0b0b12;border:none';
     } else {
-      await api.post(`/api/users/${encodeURIComponent(username)}/follow`, {});
-      btn.classList.remove('btn--ghost'); btn.classList.add('btn--gold');
-      btn.textContent = '✓ Following';
+      followBtn.textContent = '+ Follow';
+      followBtn.style.cssText += ';background:none;color:var(--text-muted);border:1px solid rgba(255,255,255,.12)';
     }
-  } catch (err) {
-    alert(err.message || 'Could not update follow status');
+    followBtn.onclick = function(){ toggleFollow(u.id, u.username, followBtn, u.isFollowing); u.isFollowing = !u.isFollowing; };
+    btnWrap.appendChild(followBtn);
   }
+
+  card.appendChild(btnWrap);
+  return card;
+}
+
+function toggleFollow(userId, username, btn, currentlyFollowing) {
+  if (!_me) { openAuthModal('login'); return; }
+  var url = '/api/users/' + encodeURIComponent(username) + '/follow';
+  var method = currentlyFollowing ? 'DELETE' : 'POST';
+  var token = auth.getToken();
+  fetch(url, {
+    method: method,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+  }).then(function(r){ return r.json(); }).then(function(){
+    if (currentlyFollowing) {
+      btn.textContent = '+ Follow';
+      btn.style.background = 'none';
+      btn.style.color = 'var(--text-muted)';
+      btn.style.border = '1px solid rgba(255,255,255,.12)';
+    } else {
+      btn.textContent = '✓ Following';
+      btn.style.background = 'var(--gold)';
+      btn.style.color = '#0b0b12';
+      btn.style.border = 'none';
+    }
+  }).catch(function(err){ alert('Could not update follow: ' + err.message); });
 }
 </script>
 </body>
