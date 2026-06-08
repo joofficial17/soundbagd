@@ -159,6 +159,38 @@ try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 try { db.exec("ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''"); } catch {}
 
+// All-time Top 5 tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS top5_albums_alltime (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK(position BETWEEN 1 AND 5),
+    UNIQUE(user_id, position)
+  );
+  CREATE TABLE IF NOT EXISTS top5_songs_alltime (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    song_title  TEXT NOT NULL,
+    artist      TEXT NOT NULL,
+    album_title TEXT,
+    artwork_url TEXT DEFAULT '',
+    itunes_id   TEXT,
+    position    INTEGER NOT NULL CHECK(position BETWEEN 1 AND 5),
+    UNIQUE(user_id, position)
+  );
+  CREATE TABLE IF NOT EXISTS top5_artists_alltime (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    artist_name TEXT NOT NULL,
+    artwork_url TEXT DEFAULT '',
+    genre       TEXT DEFAULT '',
+    itunes_id   TEXT,
+    position    INTEGER NOT NULL CHECK(position BETWEEN 1 AND 5),
+    UNIQUE(user_id, position)
+  );
+`);
+
 // Flagged reviews table
 db.exec(`
   CREATE TABLE IF NOT EXISTS review_flags (
@@ -1344,48 +1376,52 @@ app.get('/api/users/:username/reviews', (req, res) => {
   res.json(reviews);
 });
 
-// GET /api/users/:username/top5
+// GET /api/users/:username/top5?type=current|alltime
 app.get('/api/users/:username/top5', (req, res) => {
   const u = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
   if (!u) return res.status(404).json({ error: 'User not found' });
 
+  const suffix = req.query.type === 'alltime' ? '_alltime' : '';
+
   const albums  = db.prepare(`
     SELECT t.position, a.title, a.artist, a.artwork_url, a.itunes_id
-    FROM top5_albums t JOIN albums a ON t.album_id = a.id
+    FROM top5_albums${suffix} t JOIN albums a ON t.album_id = a.id
     WHERE t.user_id=? ORDER BY t.position
   `).all(u.id);
-  const songs   = db.prepare('SELECT * FROM top5_songs   WHERE user_id=? ORDER BY position').all(u.id);
-  const artists = db.prepare('SELECT * FROM top5_artists WHERE user_id=? ORDER BY position').all(u.id);
+  const songs   = db.prepare(`SELECT * FROM top5_songs${suffix}   WHERE user_id=? ORDER BY position`).all(u.id);
+  const artists = db.prepare(`SELECT * FROM top5_artists${suffix} WHERE user_id=? ORDER BY position`).all(u.id);
 
   res.json({ albums, songs, artists });
 });
 
-// PUT /api/users/me/top5/albums   { entries: [{position,itunesId,title,artist,artwork,year,genre}] }
+// PUT /api/users/me/top5/albums?type=current|alltime   { entries: [{position,itunesId,title,artist,artwork,year,genre}] }
 app.put('/api/users/me/top5/albums', auth, (req, res) => {
   const { entries } = req.body || {};
   if (!Array.isArray(entries)) return res.status(400).json({ error: 'entries array required' });
+  const suffix = req.query.type === 'alltime' ? '_alltime' : '';
 
   const run = db.transaction(() => {
-    db.prepare('DELETE FROM top5_albums WHERE user_id=?').run(req.user.id);
+    db.prepare(`DELETE FROM top5_albums${suffix} WHERE user_id=?`).run(req.user.id);
     for (const e of entries.slice(0, 5)) {
       const albumId = upsertAlbum({ itunesId: e.itunesId, title: e.title, artist: e.artist, artwork: e.artwork, year: e.year, genre: e.genre, mediaType: 'Album' });
-      db.prepare('INSERT OR REPLACE INTO top5_albums (user_id,album_id,position) VALUES (?,?,?)').run(req.user.id, albumId, e.position);
+      db.prepare(`INSERT OR REPLACE INTO top5_albums${suffix} (user_id,album_id,position) VALUES (?,?,?)`).run(req.user.id, albumId, e.position);
     }
   });
   run();
   res.json({ success: true });
 });
 
-// PUT /api/users/me/top5/songs
+// PUT /api/users/me/top5/songs?type=current|alltime
 app.put('/api/users/me/top5/songs', auth, (req, res) => {
   const { entries } = req.body || {};
   if (!Array.isArray(entries)) return res.status(400).json({ error: 'entries array required' });
+  const suffix = req.query.type === 'alltime' ? '_alltime' : '';
 
   const run = db.transaction(() => {
-    db.prepare('DELETE FROM top5_songs WHERE user_id=?').run(req.user.id);
+    db.prepare(`DELETE FROM top5_songs${suffix} WHERE user_id=?`).run(req.user.id);
     for (const e of entries.slice(0, 5)) {
       db.prepare(
-        'INSERT OR REPLACE INTO top5_songs (user_id,song_title,artist,album_title,artwork_url,itunes_id,position) VALUES (?,?,?,?,?,?,?)'
+        `INSERT OR REPLACE INTO top5_songs${suffix} (user_id,song_title,artist,album_title,artwork_url,itunes_id,position) VALUES (?,?,?,?,?,?,?)`
       ).run(req.user.id, e.songTitle, e.artist, e.albumTitle || '', e.artwork || '', e.itunesId || null, e.position);
     }
   });
@@ -1393,16 +1429,17 @@ app.put('/api/users/me/top5/songs', auth, (req, res) => {
   res.json({ success: true });
 });
 
-// PUT /api/users/me/top5/artists
+// PUT /api/users/me/top5/artists?type=current|alltime
 app.put('/api/users/me/top5/artists', auth, (req, res) => {
   const { entries } = req.body || {};
   if (!Array.isArray(entries)) return res.status(400).json({ error: 'entries array required' });
+  const suffix = req.query.type === 'alltime' ? '_alltime' : '';
 
   const run = db.transaction(() => {
-    db.prepare('DELETE FROM top5_artists WHERE user_id=?').run(req.user.id);
+    db.prepare(`DELETE FROM top5_artists${suffix} WHERE user_id=?`).run(req.user.id);
     for (const e of entries.slice(0, 5)) {
       db.prepare(
-        'INSERT OR REPLACE INTO top5_artists (user_id,artist_name,artwork_url,genre,itunes_id,position) VALUES (?,?,?,?,?,?)'
+        `INSERT OR REPLACE INTO top5_artists${suffix} (user_id,artist_name,artwork_url,genre,itunes_id,position) VALUES (?,?,?,?,?,?)`
       ).run(req.user.id, e.artistName, e.artwork || '', e.genre || '', e.itunesId || null, e.position);
     }
   });

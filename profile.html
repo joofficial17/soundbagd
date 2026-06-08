@@ -73,10 +73,22 @@
       <!-- TOP LISTS TAB -->
       <div id="tab-top-lists" style="display:none">
 
+        <!-- Current / All Time toggle -->
+        <div style="display:flex;align-items:center;gap:0;margin-bottom:28px;background:var(--bg-raised);border-radius:var(--radius-md);padding:4px;width:fit-content">
+          <button id="top5TabCurrent" onclick="switchTop5Tab('current')"
+            style="padding:7px 20px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s;background:var(--gold);color:#1a1a2e">
+            🔥 Current
+          </button>
+          <button id="top5TabAlltime" onclick="switchTop5Tab('alltime')"
+            style="padding:7px 20px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s;background:transparent;color:var(--text-muted)">
+            🏆 All Time
+          </button>
+        </div>
+
         <!-- Top 5 Albums -->
         <div style="margin-bottom:40px">
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
-            <h2 class="h3">🏆 Top 5 Albums of All Time</h2>
+            <h2 class="h3" id="top5AlbumsTitle">🏆 Top 5 Albums</h2>
             <button id="editAlbumsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('albums')">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit
@@ -90,7 +102,7 @@
         <!-- Top 5 Songs -->
         <div style="margin-bottom:40px">
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
-            <h2 class="h3">🎵 Top 5 Songs of All Time</h2>
+            <h2 class="h3" id="top5SongsTitle">🎵 Top 5 Songs</h2>
             <button id="editSongsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('songs')">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit
@@ -104,7 +116,7 @@
         <!-- Top 5 Artists -->
         <div>
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px">
-            <h2 class="h3">🎤 Top 5 Artists of All Time</h2>
+            <h2 class="h3" id="top5ArtistsTitle">🎤 Top 5 Artists</h2>
             <button id="editArtistsBtn" class="btn btn--ghost btn--sm" style="display:none" onclick="openEditTop5('artists')">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit
@@ -286,6 +298,7 @@ let _isOwnProfile = false;
 let _editTop5Type = null;
 let _top5Entries  = [];
 let _top5SearchTimeout;
+let _top5ActiveTab = 'current'; // 'current' or 'alltime'
 
 async function initPage() {
   const params   = new URLSearchParams(location.search);
@@ -313,7 +326,7 @@ async function initPage() {
     _profileUser = await api.get(`/api/users/${encodeURIComponent(target)}`);
     renderProfileHeader(_profileUser);
     loadProfileReviews(target);
-    loadTop5(target);
+    switchTop5Tab('current'); // sets labels and loads top5
     loadLists(target);
 
     // Update edit buttons
@@ -554,9 +567,43 @@ async function loadYearStats() {
   }
 }
 
-async function loadTop5(username) {
+function switchTop5Tab(tab) {
+  _top5ActiveTab = tab;
+  const currentBtn = document.getElementById('top5TabCurrent');
+  const alltimeBtn = document.getElementById('top5TabAlltime');
+  if (currentBtn && alltimeBtn) {
+    if (tab === 'current') {
+      currentBtn.style.background = 'var(--gold)';
+      currentBtn.style.color = '#1a1a2e';
+      alltimeBtn.style.background = 'transparent';
+      alltimeBtn.style.color = 'var(--text-muted)';
+    } else {
+      alltimeBtn.style.background = 'var(--gold)';
+      alltimeBtn.style.color = '#1a1a2e';
+      currentBtn.style.background = 'transparent';
+      currentBtn.style.color = 'var(--text-muted)';
+    }
+  }
+  // Update section labels
+  const label = tab === 'current' ? 'Current' : 'All Time';
+  const albumsTitle = document.getElementById('top5AlbumsTitle');
+  const songsTitle  = document.getElementById('top5SongsTitle');
+  const artistsTitle = document.getElementById('top5ArtistsTitle');
+  if (albumsTitle) albumsTitle.textContent = `🏆 Top 5 Albums · ${label}`;
+  if (songsTitle)  songsTitle.textContent  = `🎵 Top 5 Songs · ${label}`;
+  if (artistsTitle) artistsTitle.textContent = `🎤 Top 5 Artists · ${label}`;
+  // Reset lists to loading state
+  ['top5AlbumsList','top5SongsList','top5ArtistsList'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">Loading…</div>';
+  });
+  if (_profileUser) loadTop5(_profileUser.username, tab);
+}
+
+async function loadTop5(username, type) {
+  type = type || _top5ActiveTab || 'current';
   try {
-    const data = await api.get(`/api/users/${encodeURIComponent(username)}/top5`);
+    const data = await api.get(`/api/users/${encodeURIComponent(username)}/top5?type=${type}`);
 
     // Albums
     const albumsList = document.getElementById('top5AlbumsList');
@@ -570,6 +617,8 @@ async function loadTop5(username) {
             <div class="top5-item__sub">${escHtml(a.artist)}</div>
           </div>
         </div>`).join('');
+    } else {
+      albumsList.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No albums added yet.</div>';
     }
 
     // Songs
@@ -586,6 +635,8 @@ async function loadTop5(username) {
             <div class="top5-item__sub">${escHtml(s.artist)}${s.album_title ? ' · ' + escHtml(s.album_title) : ''}</div>
           </div>
         </div>`).join('');
+    } else {
+      songsList.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No songs added yet.</div>';
     }
 
     // Artists
@@ -602,6 +653,8 @@ async function loadTop5(username) {
             <div class="top5-item__sub">${escHtml(a.genre || '')}</div>
           </div>
         </div>`).join('');
+    } else {
+      artistsList.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:16px 0">No artists added yet.</div>';
     }
   } catch { /* server not running */ }
 }
@@ -641,7 +694,8 @@ function openEditTop5(type) {
   _editTop5Type = type;
   _top5Entries  = [];
 
-  const titles  = { albums: 'Edit Top 5 Albums', songs: 'Edit Top 5 Songs', artists: 'Edit Top 5 Artists' };
+  const tabLabel = _top5ActiveTab === 'alltime' ? ' · All Time' : ' · Current';
+  const titles  = { albums: 'Edit Top 5 Albums' + tabLabel, songs: 'Edit Top 5 Songs' + tabLabel, artists: 'Edit Top 5 Artists' + tabLabel };
   const hints   = { albums: 'Search for albums to add.', songs: 'Search for songs to add.', artists: 'Search for artists to add.' };
   document.getElementById('editTop5Title').textContent = titles[type];
   document.getElementById('editTop5Hint').textContent  = hints[type];
@@ -650,8 +704,8 @@ function openEditTop5(type) {
   document.getElementById('top5Error').style.display   = 'none';
   renderSelectedTop5();
 
-  // Load current top5 into _top5Entries
-  api.get(`/api/users/${encodeURIComponent(_profileUser?.username || '')}/top5`).then(data => {
+  // Load current top5 into _top5Entries (for active tab type)
+  api.get(`/api/users/${encodeURIComponent(_profileUser?.username || '')}/top5?type=${_top5ActiveTab}`).then(data => {
     const key = { albums: 'albums', songs: 'songs', artists: 'artists' }[type];
     if (data[key]?.length) {
       _top5Entries = data[key].map((item, i) => ({
@@ -791,10 +845,10 @@ async function saveTop5() {
       if (_editTop5Type === 'songs')  return { position: i+1, itunesId: e.itunesId, songTitle: e.label, artist: e.raw?.artist || e.sub, albumTitle: e.raw?.album || '', artwork: e.artwork };
       if (_editTop5Type === 'artists')return { position: i+1, itunesId: e.itunesId, artistName: e.label, artwork: e.artwork, genre: e.sub };
     });
-    await api.put(`/api/users/me/top5/${_editTop5Type}`, { entries });
+    await api.put(`/api/users/me/top5/${_editTop5Type}?type=${_top5ActiveTab}`, { entries });
     document.getElementById('editTop5Modal').classList.remove('open');
     showToast('Top 5 saved! 🎵');
-    loadTop5(_profileUser?.username || '');
+    loadTop5(_profileUser?.username || '', _top5ActiveTab);
   } catch (err) {
     document.getElementById('top5Error').textContent = err.message;
     document.getElementById('top5Error').style.display = '';
