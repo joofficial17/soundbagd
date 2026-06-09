@@ -256,6 +256,17 @@ try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 try { db.exec("ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT ''"); } catch {}
 
+// EP reclassification: any album in DB with 3-6 tracks labeled 'Single' should be 'EP'
+try {
+  db.exec(`
+    UPDATE albums
+    SET media_type = 'EP'
+    WHERE track_count BETWEEN 3 AND 6
+      AND LOWER(media_type) IN ('single','album')
+      AND (LOWER(title) LIKE '%ep%' OR LOWER(title) LIKE '% ep' OR track_count BETWEEN 3 AND 5)
+  `);
+} catch {}
+
 // All-time Top 5 tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS top5_albums_alltime (
@@ -480,6 +491,42 @@ async function cachedFetch(url, ttl = CACHE_1H) {
 }
 
 // ── Spotify Helpers ────────────────────────────────────────
+// EP = 3–6 tracks, runtime < 30 min. Singles = 1–2 tracks.
+function classifySpotifyType(albumType, trackCount) {
+  const t = (albumType || '').toLowerCase();
+  if (t === 'compilation') return 'Album';
+  const n = Number(trackCount) || 0;
+  if (n >= 3 && n <= 6) return 'EP';     // Spotify calls these 'single'; correct it
+  if (t === 'single' || n <= 2) return 'Single';
+  return 'Album';
+}
+
+function classifyAppleType(collectionType, trackCount) {
+  const t = (collectionType || '').toLowerCase();
+  if (t.includes('ep')) return 'EP';
+  const n = Number(trackCount) || 0;
+  if (n >= 3 && n <= 6) return 'EP';
+  if (n > 0 && n <= 2)  return 'Single';
+  return 'Album';
+}
+
+// After fetching full track list, re-check EP/Single classification using actual duration
+function reclassifyWithTracks(album, tracks) {
+  if (!tracks?.length) return album;
+  const totalMs = tracks.reduce((s, t) => s + (t.duration || 0), 0);
+  const n = tracks.length;
+  // EP: 3–6 tracks AND total runtime < 30 minutes
+  if (n >= 3 && n <= 6 && totalMs < 30 * 60 * 1000) {
+    album.mediaType = 'EP';
+  } else if (n <= 2 && album.mediaType !== 'Album') {
+    album.mediaType = 'Single';
+  } else if (n >= 7 || totalMs >= 30 * 60 * 1000) {
+    // Has enough tracks/runtime to be a full album — upgrade from EP if misclassified
+    if (album.mediaType === 'EP') album.mediaType = 'Album';
+  }
+  return album;
+}
+
 function formatAlbum(item) {
   // Handles both full album objects and simplified album objects from Spotify
   const images  = item.images || [];
@@ -496,7 +543,7 @@ function formatAlbum(item) {
     artwork,
     year,
     genre:      genres[0] || item.label || '',
-    mediaType:  item.album_type === 'single' ? 'Single' : 'Album',
+    mediaType:  classifySpotifyType(item.album_type, item.total_tracks),
     trackCount: item.total_tracks || null,
     itunesUrl:  item.external_urls?.spotify || '', // Spotify URL stored in itunesUrl field
     popularity: item.popularity || null,
@@ -666,7 +713,7 @@ function formatAppleAlbum(item) {
     artwork:    artworkHQ(item.artworkUrl100 || item.artworkUrl60 || ''),
     year:       item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
     genre:      item.primaryGenreName || item.genres?.[0]?.name || '',
-    mediaType:  item.collectionType || 'Album',
+    mediaType:  classifyAppleType(item.collectionType, item.trackCount),
     trackCount: item.trackCount || null,
     itunesUrl:  item.collectionViewUrl || item.url || '',
   };
@@ -1024,12 +1071,42 @@ app.get('/api/music/album/:id', async (req, res) => {
   const dbAlbum = db.prepare('SELECT * FROM albums WHERE itunes_id=?').get(id);
   if (dbAlbum) {
     const stats = db.prepare('SELECT COUNT(*) as total, ROUND(AVG(rating),2) as avg FROM reviews WHERE album_id=?').get(dbAlbum.id);
-    return res.json({
+    const base = {
       itunesId: dbAlbum.itunes_id, title: dbAlbum.title, artist: dbAlbum.artist,
       artwork: dbAlbum.artwork_url, year: dbAlbum.year, genre: dbAlbum.genre,
       mediaType: dbAlbum.media_type, trackCount: dbAlbum.track_count,
       itunesUrl: dbAlbum.itunes_url, tracks: [], stats,
-    });
+    };
+    // Fetch tracklist from iTunes (numeric ID) or Spotify (22-char) so the album
+    // page always shows the full track listing.
+    if (/^\d+$/.test(id)) {
+      try {
+        const data = await cachedFetch(
+          `https://itunes.apple.com/lookup?id=${id}&entity=song`, CACHE_1H
+        );
+        const results = data.results || [];
+        base.tracks = results
+          .filter(r => r.wrapperType === 'track' && r.kind === 'song')
+          .map(t => ({ number: t.trackNumber, title: t.trackName, duration: t.trackTimeMillis, itunesUrl: t.trackViewUrl }));
+        reclassifyWithTracks(base, base.tracks);
+      } catch { /* non-fatal */ }
+    } else if (/^[A-Za-z0-9]{22}$/.test(id)) {
+      try {
+        const sp = await spotifyFetch(`/albums/${id}`, CACHE_1H);
+        if (sp?.tracks?.items) {
+          base.tracks = sp.tracks.items.map((t, i) => ({
+            number: t.track_number || i + 1, title: t.name,
+            duration: t.duration_ms, itunesUrl: t.external_urls?.spotify || '',
+          }));
+          reclassifyWithTracks(base, base.tracks);
+        }
+      } catch { /* non-fatal */ }
+    }
+    // Persist any media_type correction back to DB
+    if (base.mediaType !== dbAlbum.media_type) {
+      try { db.prepare('UPDATE albums SET media_type=? WHERE id=?').run(base.mediaType, dbAlbum.id); } catch {}
+    }
+    return res.json(base);
   }
 
   // ── 2. Spotify ID (22-char alphanumeric) ─────────────────
@@ -1042,6 +1119,7 @@ app.get('/api/music/album/:id', async (req, res) => {
           number: t.track_number || i + 1, title: t.name,
           duration: t.duration_ms, itunesUrl: t.external_urls?.spotify || '',
         }));
+        reclassifyWithTracks(album, album.tracks);
         return res.json(attachStats(album, id));
       }
     } catch { /* fall through */ }
@@ -1060,6 +1138,7 @@ app.get('/api/music/album/:id', async (req, res) => {
         album.tracks = results
           .filter(r => r.wrapperType === 'track' && r.kind === 'song')
           .map(t => ({ number: t.trackNumber, title: t.trackName, duration: t.trackTimeMillis, itunesUrl: t.trackViewUrl }));
+        reclassifyWithTracks(album, album.tracks);
         return res.json(attachStats(album, id));
       }
     } catch { /* fall through */ }
@@ -1081,6 +1160,7 @@ app.get('/api/music/album/:id', async (req, res) => {
           number: t.track_number || i + 1, title: t.name,
           duration: t.duration_ms, itunesUrl: t.external_urls?.spotify || '',
         }));
+        reclassifyWithTracks(album, album.tracks);
         return res.json(attachStats(album, id));
       }
     } catch { /* fall through */ }
@@ -1092,7 +1172,17 @@ app.get('/api/music/album/:id', async (req, res) => {
       const hit  = data.results?.[0];
       if (hit) {
         const album = formatAppleAlbum(hit);
-        album.tracks = [];
+        // Fetch full tracklist using the real iTunes collection ID
+        const realId = String(hit.collectionId || '');
+        if (realId) {
+          try {
+            const td = await cachedFetch(`https://itunes.apple.com/lookup?id=${realId}&entity=song`, CACHE_1H);
+            album.tracks = (td.results || [])
+              .filter(r => r.wrapperType === 'track' && r.kind === 'song')
+              .map(t => ({ number: t.trackNumber, title: t.trackName, duration: t.trackTimeMillis, itunesUrl: t.trackViewUrl }));
+          } catch { album.tracks = []; }
+        } else { album.tracks = []; }
+        reclassifyWithTracks(album, album.tracks);
         return res.json(attachStats(album, id));
       }
     } catch { /* fall through */ }
