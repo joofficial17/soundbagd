@@ -1306,6 +1306,10 @@ function injectNav() {
     <a href="#" id="navSignIn" class="btn btn--ghost btn--sm" onclick="event.preventDefault();openAuthModal('login')">Sign In</a>
     <a href="#" id="navJoin"   class="btn btn--gold btn--sm"  onclick="event.preventDefault();openAuthModal('register')">Join Free</a>
     <div id="navProfile" style="display:none;align-items:center;gap:8px">
+      <a href="following.html" class="btn btn--ghost btn--sm" style="gap:5px;display:inline-flex;align-items:center" title="Following Feed">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Feed
+      </a>
       <a href="#" id="navProfileLink" class="nav-profile-btn" style="display:flex;align-items:center;gap:8px;text-decoration:none">
         <div class="avatar nav-avatar" style="width:32px;height:32px;font-size:.75rem"></div>
         <span class="nav-username text-sm" style="font-weight:600"></span>
@@ -1353,6 +1357,7 @@ function injectMobileUI() {
           <li><a href="community.html" ${page==='community.html' ? 'class="active"':''}>👥 Community</a></li>
           <li><a href="ratings.html"   ${page==='ratings.html'   ? 'class="active"':''}>⭐ Ratings</a></li>
           ${user ? `<li><a href="profile.html?u=${encodeURIComponent(user.username)}" ${page==='profile.html' ? 'class="active"':''}>👤 My Profile</a></li>` : ''}
+          ${user ? `<li><a href="following.html" ${page==='following.html' ? 'class="active"':''}>🎧 Following Feed</a></li>` : ''}
           ${user?.role === 'admin' || user?.role === 'mod' ? `<li><a href="admin.html" ${page==='admin.html' ? 'class="active"':''} style="color:var(--gold)">🛡️ Admin</a></li>` : ''}
         </ul>
         <hr class="nav__drawer__divider">

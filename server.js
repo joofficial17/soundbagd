@@ -1365,6 +1365,40 @@ app.get('/api/reviews/album/:itunesId', (req, res) => {
   res.json(reviews);
 });
 
+// GET /api/reviews/following?perUser=5  — reviews from people the auth'd user follows
+app.get('/api/reviews/following', auth, (req, res) => {
+  const perUser = Math.min(Number(req.query.perUser) || 5, 20);
+  // Fetch everyone the current user follows
+  const followed = db.prepare('SELECT following_id FROM follows WHERE follower_id=?').all(req.user.id);
+  if (!followed.length) return res.json([]);
+
+  const ids = followed.map(r => r.following_id);
+  const placeholders = ids.map(() => '?').join(',');
+
+  // For each followed user grab their N most recent reviews, then sort globally
+  const reviews = db.prepare(`
+    SELECT r.id, r.rating, r.review_text, r.created_at, r.tags, r.last_listened,
+           u.id AS user_id, u.username, u.initials, u.avatar_gradient,
+           a.title, a.artist, a.artwork_url, a.itunes_id, a.media_type,
+           (SELECT COUNT(*) FROM review_likes rl WHERE rl.review_id = r.id) AS like_count,
+           (SELECT COUNT(*) FROM review_comments rc WHERE rc.review_id = r.id) AS comment_count,
+           (SELECT COUNT(*) FROM review_likes rl2 WHERE rl2.review_id = r.id AND rl2.user_id = ?) AS is_liked
+    FROM reviews r
+    JOIN users u ON r.user_id = u.id
+    JOIN albums a ON r.album_id = a.id
+    WHERE r.user_id IN (${placeholders})
+      AND r.id IN (
+        SELECT r2.id FROM reviews r2
+        WHERE r2.user_id = r.user_id
+        ORDER BY r2.created_at DESC
+        LIMIT ${perUser}
+      )
+    ORDER BY r.created_at DESC
+  `).all(req.user.id, ...ids);
+
+  res.json(reviews);
+});
+
 // GET /api/reviews/recent?limit=20
 app.get('/api/reviews/recent', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 50);

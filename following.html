@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#d4af37">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Soundbagd">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+  <title>Following · Soundbagd</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="index.html" class="nav__logo">Sound<span>bagd</span></a>
+    <ul class="nav__links">
+      <li><a href="index.html">Explore</a></li>
+      <li><a href="community.html">Community</a></li>
+      <li><a href="ratings.html">Ratings</a></li>
+    </ul>
+    <div class="nav__search">
+      <svg class="nav__search__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Search albums, songs, artists…" autocomplete="off">
+    </div>
+    <div class="nav__actions"></div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section style="background:var(--bg-card);border-bottom:1px solid var(--border);padding:40px 0 28px">
+  <div class="container">
+    <div class="hero__eyebrow">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Following Feed
+    </div>
+    <h1 class="hero__title" style="font-size:clamp(1.8rem,3vw,2.4rem);margin-bottom:8px">
+      What people you follow are <em>listening to.</em>
+    </h1>
+    <p class="hero__sub" style="font-size:.9rem;max-width:520px">
+      The 5 most recent reviews from everyone you follow, sorted by newest first.
+    </p>
+  </div>
+</section>
+
+<!-- Feed -->
+<div class="container" style="padding-top:36px;padding-bottom:80px;max-width:720px">
+
+  <!-- Not logged in -->
+  <div id="guestMsg" style="display:none;text-align:center;padding:80px 20px">
+    <div style="font-size:3rem;margin-bottom:16px">🎵</div>
+    <h2 class="h3" style="margin-bottom:8px">Sign in to see your feed</h2>
+    <p class="text-sm muted" style="margin-bottom:24px">Follow people to see their latest reviews here.</p>
+    <a href="index.html" class="btn btn--gold">Go to Explore</a>
+  </div>
+
+  <!-- No follows yet -->
+  <div id="emptyMsg" style="display:none;text-align:center;padding:80px 20px">
+    <div style="font-size:3rem;margin-bottom:16px">👀</div>
+    <h2 class="h3" style="margin-bottom:8px">You're not following anyone yet</h2>
+    <p class="text-sm muted" style="margin-bottom:24px">Head to the Community page to find people whose taste you trust.</p>
+    <a href="community.html" class="btn btn--gold">Browse Community</a>
+  </div>
+
+  <!-- Feed list -->
+  <div id="feedList"></div>
+
+</div>
+
+<script src="app.js"></script>
+<script>
+async function initPage() {
+  if (!auth.isLoggedIn()) {
+    document.getElementById('guestMsg').style.display = 'block';
+    return;
+  }
+
+  showSkeletons();
+
+  let reviews;
+  try {
+    reviews = await api.get('/api/reviews/following?perUser=5');
+  } catch (err) {
+    document.getElementById('feedList').innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:.9rem">Could not load feed — ${escHtml(err.message)}</div>
+      </div>`;
+    return;
+  }
+
+  if (!reviews.length) {
+    document.getElementById('emptyMsg').style.display = 'block';
+    document.getElementById('feedList').innerHTML = '';
+    return;
+  }
+
+  renderFeed(reviews);
+}
+
+function showSkeletons() {
+  document.getElementById('feedList').innerHTML = Array.from({ length: 6 }, () => `
+    <div style="display:flex;gap:14px;padding:18px 0;border-bottom:1px solid var(--border)">
+      <div style="width:56px;height:56px;border-radius:var(--radius-sm);background:var(--bg-raised);animation:pulse 1.5s ease infinite;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="height:13px;background:var(--bg-raised);border-radius:4px;margin-bottom:8px;animation:pulse 1.5s ease infinite"></div>
+        <div style="height:11px;background:var(--bg-raised);border-radius:4px;width:55%;animation:pulse 1.5s ease infinite"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderFeed(reviews) {
+  // Group by user so we can show a user header before each person's block
+  const groups = [];
+  const seen = new Map();
+  reviews.forEach(r => {
+    if (!seen.has(r.user_id)) {
+      seen.set(r.user_id, { username: r.username, initials: r.initials, avatar_gradient: r.avatar_gradient, reviews: [] });
+      groups.push(seen.get(r.user_id));
+    }
+    seen.get(r.user_id).reviews.push(r);
+  });
+
+  document.getElementById('feedList').innerHTML = groups.map(g => `
+    <!-- User header -->
+    <div style="display:flex;align-items:center;gap:10px;margin:28px 0 14px">
+      <div class="avatar avatar--sm" style="background:${escHtml(g.avatar_gradient)};flex-shrink:0">
+        ${escHtml(g.initials)}
+      </div>
+      <a href="profile.html?u=${encodeURIComponent(g.username)}"
+        style="font-weight:700;font-size:.95rem;color:var(--gold);text-decoration:none">
+        @${escHtml(g.username)}
+      </a>
+      <span style="font-size:.78rem;color:var(--text-muted)">${g.reviews.length} recent review${g.reviews.length !== 1 ? 's' : ''}</span>
+    </div>
+
+    <!-- That user's reviews -->
+    <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-card)">
+      ${g.reviews.map((r, i) => reviewRow(r, i === g.reviews.length - 1)).join('')}
+    </div>
+  `).join('');
+}
+
+function reviewRow(r, isLast) {
+  const stars   = starsHtml(r.rating, 14);
+  const date    = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const typeTag = r.media_type && r.media_type.toLowerCase() !== 'album'
+    ? `<span class="tag" style="font-size:.6rem;padding:2px 6px">${escHtml(r.media_type)}</span>` : '';
+
+  return `
+    <div style="display:flex;gap:12px;padding:14px 16px;${isLast ? '' : 'border-bottom:1px solid var(--border);'}cursor:pointer;transition:var(--transition)"
+      onclick="location.href='album.html?id=${escHtml(r.itunes_id)}&title=${encodeURIComponent(r.title)}&artist=${encodeURIComponent(r.artist)}'"
+      onmouseover="this.style.background='var(--bg-raised)'" onmouseout="this.style.background=''">
+
+      <img src="${escHtml(r.artwork_url)}" alt=""
+        style="width:52px;height:52px;border-radius:var(--radius-sm);object-fit:cover;flex-shrink:0"
+        onerror="this.style.display='none'">
+
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.88rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${escHtml(r.title)} ${typeTag}
+        </div>
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:5px">${escHtml(r.artist)}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="display:flex;gap:2px">${stars}</span>
+          <span style="font-size:.75rem;font-weight:700;color:var(--gold)">${r.rating}</span>
+          ${r.last_listened ? `<span style="font-size:.72rem;color:var(--text-muted)">· Last listened: <strong style="color:var(--text)">${formatLastListened(r.last_listened)}</strong></span>` : ''}
+        </div>
+        ${r.review_text ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4">${escHtml(r.review_text)}</div>` : ''}
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:4px">${date}</div>
+      </div>
+
+    </div>`;
+}
+</script>
+</body>
+</html>
