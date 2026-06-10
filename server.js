@@ -250,6 +250,28 @@ db.exec(`
 `);
 
 // ── DB Migrations (add columns to existing tables) ────────
+// ── Physical collection table ─────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS physical_collection (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    discogs_id      TEXT,
+    title           TEXT    NOT NULL,
+    artist          TEXT    NOT NULL,
+    format          TEXT    NOT NULL DEFAULT 'Vinyl',
+    format_detail   TEXT    DEFAULT '',
+    year            INTEGER,
+    label           TEXT    DEFAULT '',
+    catalog_number  TEXT    DEFAULT '',
+    artwork_url     TEXT    DEFAULT '',
+    discogs_url     TEXT    DEFAULT '',
+    notes           TEXT    DEFAULT '',
+    condition       TEXT    DEFAULT '',
+    added_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_phys_user ON physical_collection(user_id);
+`);
+
 try { db.exec("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE reviews ADD COLUMN last_listened TEXT DEFAULT NULL"); } catch {}
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
@@ -316,6 +338,61 @@ db.exec(`
 const cache    = new Map();
 const CACHE_1H = 60 * 60 * 1000;
 const CACHE_5M = 5  * 60 * 1000;
+
+// ── Discogs ────────────────────────────────────────────────
+// Uses Personal Access Token (DISCOGS_TOKEN env var) for all requests.
+// Discogs is ONLY used for the physical collection feature and as a
+// last-resort review fallback — it never feeds the main Explore/search.
+const DISCOGS_TOKEN = process.env.DISCOGS_TOKEN || '';
+const DISCOGS_BASE  = 'https://api.discogs.com';
+
+async function discogsFetch(path, ttl = CACHE_1H) {
+  if (!DISCOGS_TOKEN) throw new Error('Discogs not configured — set DISCOGS_TOKEN in Railway Variables');
+  const url = DISCOGS_BASE + path;
+  const hit = cache.get('dg:' + url);
+  if (hit && Date.now() - hit.ts < ttl) return hit.data;
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Discogs token=${DISCOGS_TOKEN}`,
+      'User-Agent':    'Soundbagd/1.0 +https://soundbagd.up.railway.app',
+    },
+  });
+  if (!res.ok) throw new Error(`Discogs ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  cache.set('dg:' + url, { ts: Date.now(), data });
+  return data;
+}
+
+// Normalize a Discogs release/master into our standard shape
+function formatDiscogsRelease(r) {
+  const formats = (r.formats || []).map(f => f.name).filter(Boolean);
+  const formatDetail = (r.formats || []).flatMap(f => f.descriptions || []).join(', ');
+  const mainFormat = formats[0] || r.format?.[0] || 'Vinyl';
+  // Map Discogs format names to our three categories
+  const FORMAT_MAP = { 'Vinyl': 'Vinyl', 'LP': 'Vinyl', '7"': 'Vinyl', '10"': 'Vinyl', '12"': 'Vinyl',
+    'Cassette': 'Cassette', 'CD': 'CD', 'CDr': 'CD', 'DVD': 'CD', 'SACD': 'CD' };
+  const format = FORMAT_MAP[mainFormat] || 'Vinyl';
+
+  const artwork = r.cover_image || r.thumb || r.images?.[0]?.uri || '';
+  const label   = (r.labels || r.label || []).map?.(l => typeof l === 'string' ? l : l.name).filter(Boolean).join(', ') || '';
+
+  return {
+    discogsId:    String(r.id || ''),
+    title:        r.title || '',
+    artist:       (r.artists || []).map(a => a.name.replace(/ \(\d+\)$/, '')).join(', ')
+                  || r.artists_sort || '',
+    format,
+    formatDetail,
+    year:         r.year || null,
+    label,
+    catalogNumber: (r.labels || []).map?.(l => l.catno).filter(Boolean).join(', ') || '',
+    artworkUrl:   artwork,
+    discogsUrl:   `https://www.discogs.com${r.uri || `/release/${r.id}`}`,
+    country:      r.country || '',
+    genres:       r.genres || [],
+    styles:       r.styles || [],
+  };
+}
 
 // ── Spotify Credentials ────────────────────────────────────
 const SPOTIFY_CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID     || '671ec2ef78314d90bf3a765a8cc53aa5';
@@ -1189,6 +1266,106 @@ app.get('/api/music/album/:id', async (req, res) => {
   }
 
   res.status(404).json({ error: 'Album not found' });
+});
+
+// ── DISCOGS / PHYSICAL COLLECTION ─────────────────────────
+
+// GET /api/discogs/search?q=&format=  (Vinyl|Cassette|CD|all)
+// ONLY used from the physical-collection UI — not exposed to main search
+app.get('/api/discogs/search', async (req, res) => {
+  const q      = String(req.query.q || '').trim();
+  const format = String(req.query.format || 'all').toLowerCase();
+  if (!q) return res.status(400).json({ error: 'q is required' });
+
+  const FORMAT_PARAM = { vinyl: 'Vinyl', cassette: 'Cassette', cd: 'CD' };
+  let qs = new URLSearchParams({ q, type: 'release', per_page: '20', page: '1' });
+  if (FORMAT_PARAM[format]) qs.set('format', FORMAT_PARAM[format]);
+
+  try {
+    const data = await discogsFetch(`/database/search?${qs}`, CACHE_1H);
+    const results = (data.results || []).map(r => ({
+      discogsId:   String(r.id),
+      title:       r.title || '',
+      artist:      r.title?.split(' - ')?.[0] || '',
+      format:      (r.format || [])[0] || 'Vinyl',
+      formatDetail: (r.format || []).slice(1).join(', '),
+      year:        r.year || null,
+      label:       (r.label || [])[0] || '',
+      catalogNumber: r.catno || '',
+      artworkUrl:  r.cover_image || r.thumb || '',
+      country:     r.country || '',
+      discogsUrl:  `https://www.discogs.com/release/${r.id}`,
+      genres:      r.genre || [],
+      styles:      r.style || [],
+    }));
+    res.json(results);
+  } catch (err) {
+    res.status(err.message.includes('not configured') ? 503 : 502).json({ error: err.message });
+  }
+});
+
+// GET /api/discogs/release/:id  — full release detail
+app.get('/api/discogs/release/:id', async (req, res) => {
+  try {
+    const data = await discogsFetch(`/releases/${req.params.id}`, CACHE_1H);
+    res.json(formatDiscogsRelease(data));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// GET /api/collection/:username  — public view of someone's physical collection
+app.get('/api/collection/:username', (req, res) => {
+  const user = db.prepare('SELECT id FROM users WHERE username=?').get(req.params.username.toLowerCase());
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const items = db.prepare(`
+    SELECT id, discogs_id, title, artist, format, format_detail, year, label,
+           catalog_number, artwork_url, discogs_url, notes, condition, added_at
+    FROM physical_collection WHERE user_id=? ORDER BY format, artist, title
+  `).all(user.id);
+  res.json(items);
+});
+
+// POST /api/collection  — add an item
+app.post('/api/collection', auth, (req, res) => {
+  const { discogsId, title, artist, format, formatDetail, year, label,
+          catalogNumber, artworkUrl, discogsUrl, notes, condition } = req.body || {};
+  if (!title?.trim() || !artist?.trim()) return res.status(400).json({ error: 'title and artist are required' });
+  const VALID_FORMATS = ['Vinyl', 'Cassette', 'CD'];
+  const fmt = VALID_FORMATS.includes(format) ? format : 'Vinyl';
+  try {
+    const result = db.prepare(`
+      INSERT INTO physical_collection
+        (user_id, discogs_id, title, artist, format, format_detail, year, label,
+         catalog_number, artwork_url, discogs_url, notes, condition)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(req.user.id, discogsId || null, title.trim(), artist.trim(), fmt,
+           formatDetail || '', year || null, label || '', catalogNumber || '',
+           artworkUrl || '', discogsUrl || '', notes || '', condition || '');
+    res.json({ id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not add item' });
+  }
+});
+
+// PATCH /api/collection/:id  — update notes/condition
+app.patch('/api/collection/:id', auth, (req, res) => {
+  const item = db.prepare('SELECT * FROM physical_collection WHERE id=?').get(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.user_id !== req.user.id) return res.status(403).json({ error: 'Not your collection' });
+  const notes     = req.body.notes     !== undefined ? String(req.body.notes).slice(0, 500)     : item.notes;
+  const condition = req.body.condition !== undefined ? String(req.body.condition).slice(0, 100)  : item.condition;
+  db.prepare('UPDATE physical_collection SET notes=?, condition=? WHERE id=?').run(notes, condition, item.id);
+  res.json({ success: true });
+});
+
+// DELETE /api/collection/:id
+app.delete('/api/collection/:id', auth, (req, res) => {
+  const item = db.prepare('SELECT * FROM physical_collection WHERE id=?').get(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.user_id !== req.user.id) return res.status(403).json({ error: 'Not your collection' });
+  db.prepare('DELETE FROM physical_collection WHERE id=?').run(item.id);
+  res.json({ success: true });
 });
 
 // ── DSP IMPORT ─────────────────────────────────────────────

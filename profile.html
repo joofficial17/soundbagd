@@ -52,6 +52,7 @@
       <button class="profile-tab" data-tab="tab-diary" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Diary</button>
       <button class="profile-tab" data-tab="tab-lists" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Lists</button>
       <button class="profile-tab" data-tab="tab-yearstats" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Year in Review</button>
+      <button class="profile-tab" data-tab="tab-collection" style="padding:10px 18px;font-size:.875rem;font-weight:600;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:var(--transition)">Collection</button>
     </div>
   </div>
 </div>
@@ -166,6 +167,30 @@
         </div>
       </div>
 
+      <!-- PHYSICAL COLLECTION TAB -->
+      <div id="tab-collection" style="display:none">
+        <div class="section__header" style="margin-bottom:20px">
+          <h2 class="h4" id="collectionTabTitle">Physical Collection</h2>
+          <button id="addToCollectionBtn" class="btn btn--gold btn--sm" style="display:none" onclick="openCollectionSearch()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Add Record
+          </button>
+        </div>
+
+        <!-- Format filter tabs -->
+        <div id="collectionFilterBar" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+          <button class="tag tag--gold" onclick="setCollectionFilter('all',this)">All</button>
+          <button class="tag" onclick="setCollectionFilter('Vinyl',this)">🎵 Vinyl</button>
+          <button class="tag" onclick="setCollectionFilter('CD',this)">💿 CD</button>
+          <button class="tag" onclick="setCollectionFilter('Cassette',this)">📼 Cassette</button>
+        </div>
+
+        <!-- Stats bar -->
+        <div id="collectionStats" style="display:none;gap:20px;margin-bottom:24px;flex-wrap:wrap"></div>
+
+        <div id="collectionGrid"></div>
+      </div>
+
       <!-- LISTS TAB -->
       <div id="tab-lists" style="display:none">
         <div class="section__header" style="margin-bottom:20px">
@@ -182,6 +207,59 @@
 
     </div>
 
+  </div>
+</div>
+
+<!-- ── Physical Collection Search Modal ───────────────────── -->
+<div class="modal-backdrop" id="collectionSearchModal" style="display:none">
+  <div class="modal" style="max-width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h3 style="font-family:'Playfair Display',serif">Add to Collection</h3>
+      <button class="modal__close" onclick="closeCollectionSearch()">✕</button>
+    </div>
+
+    <!-- Format picker -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="tag tag--gold" id="cFmtAll"      onclick="setCollectionSearchFmt('all',this)">All</button>
+      <button class="tag"           id="cFmtVinyl"    onclick="setCollectionSearchFmt('vinyl',this)">🎵 Vinyl</button>
+      <button class="tag"           id="cFmtCD"       onclick="setCollectionSearchFmt('cd',this)">💿 CD</button>
+      <button class="tag"           id="cFmtCassette" onclick="setCollectionSearchFmt('cassette',this)">📼 Cassette</button>
+    </div>
+
+    <!-- Search input -->
+    <div style="position:relative;margin-bottom:16px">
+      <input type="text" id="collectionSearchInput"
+        placeholder="Search Discogs — artist, album, catalog #…"
+        style="width:100%;padding:10px 14px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none;box-sizing:border-box"
+        oninput="scheduleCollectionSearch(this.value)" autocomplete="off">
+    </div>
+
+    <div id="collectionSearchResults" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:10px">
+      <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:.875rem">
+        Search Discogs to find vinyl, CDs, and cassettes.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Collection Item Detail / Edit Modal ─────────────────── -->
+<div class="modal-backdrop" id="collectionDetailModal" style="display:none">
+  <div class="modal" style="max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h3 style="font-family:'Playfair Display',serif" id="collDetailTitle">Edit Item</h3>
+      <button class="modal__close" onclick="closeCollectionDetail()">✕</button>
+    </div>
+    <div id="collDetailArt" style="display:flex;gap:14px;margin-bottom:16px"></div>
+    <label style="font-size:.82rem;color:var(--text-muted);display:block;margin-bottom:4px">Condition</label>
+    <input id="collDetailCondition" type="text" placeholder="e.g. VG+, Mint, Good"
+      style="width:100%;padding:8px 12px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.875rem;margin-bottom:14px;outline:none;box-sizing:border-box">
+    <label style="font-size:.82rem;color:var(--text-muted);display:block;margin-bottom:4px">Notes</label>
+    <textarea id="collDetailNotes" rows="3" placeholder="Signed copy, original pressing, etc."
+      style="width:100%;padding:8px 12px;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.875rem;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn--gold" style="flex:1" onclick="saveCollectionDetail()">Save</button>
+      <button class="btn btn--ghost" style="color:var(--coral)" onclick="removeCollectionItem()">Remove</button>
+    </div>
   </div>
 </div>
 
@@ -680,7 +758,7 @@ document.querySelectorAll('.profile-tab').forEach(btn => {
     });
     btn.style.color = 'var(--gold)';
     btn.style.borderBottomColor = 'var(--gold)';
-    ['tab-reviews','tab-top-lists','tab-diary','tab-lists','tab-yearstats'].forEach(id => {
+    ['tab-reviews','tab-top-lists','tab-diary','tab-lists','tab-yearstats','tab-collection'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -688,6 +766,7 @@ document.querySelectorAll('.profile-tab').forEach(btn => {
     if (target) target.style.display = '';
     // Auto-load year stats when that tab is clicked
     if (btn.dataset.tab === 'tab-yearstats') loadYearStats();
+    if (btn.dataset.tab === 'tab-collection') loadCollection();
   });
 });
 
@@ -1260,6 +1339,281 @@ function closeFollowModal() {
   const modal = document.getElementById('followListModal');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// ── Physical Collection ──────────────────────────────────────
+
+let _collection        = [];       // full list for current profile
+let _collectionFilter  = 'all';    // 'all' | 'Vinyl' | 'CD' | 'Cassette'
+let _collSearchFmt     = 'all';
+let _collSearchTimer   = null;
+let _collDetailId      = null;     // id of item being edited
+
+const FORMAT_ICON = { Vinyl: '🎵', CD: '💿', Cassette: '📼' };
+const CONDITION_GRADES = ['Mint (M)', 'Near Mint (NM)', 'Very Good Plus (VG+)', 'Very Good (VG)', 'Good Plus (G+)', 'Good (G)', 'Fair (F)', 'Poor (P)'];
+
+async function loadCollection() {
+  if (!_profileUser) return;
+  const isOwner = auth.getUser()?.username?.toLowerCase() === _profileUser.username.toLowerCase();
+  document.getElementById('addToCollectionBtn').style.display = isOwner ? '' : 'none';
+  document.getElementById('collectionTabTitle').textContent =
+    isOwner ? 'My Physical Collection' : `${_profileUser.username}'s Collection`;
+
+  document.getElementById('collectionGrid').innerHTML =
+    `<div style="color:var(--text-muted);font-size:.875rem;padding:20px 0">Loading…</div>`;
+
+  try {
+    _collection = await api.get(`/api/collection/${encodeURIComponent(_profileUser.username)}`);
+  } catch (err) {
+    document.getElementById('collectionGrid').innerHTML =
+      `<div style="color:var(--coral);font-size:.875rem;padding:20px 0">${escHtml(err.message)}</div>`;
+    return;
+  }
+
+  renderCollectionStats();
+  renderCollection();
+}
+
+function renderCollectionStats() {
+  const stats = document.getElementById('collectionStats');
+  if (!_collection.length) { stats.style.display = 'none'; return; }
+  const counts = { Vinyl: 0, CD: 0, Cassette: 0 };
+  _collection.forEach(i => { if (counts[i.format] !== undefined) counts[i.format]++; });
+  stats.style.display = 'flex';
+  stats.innerHTML = Object.entries(counts)
+    .filter(([,n]) => n > 0)
+    .map(([fmt, n]) => `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;text-align:center;min-width:80px">
+        <div style="font-size:1.4rem">${FORMAT_ICON[fmt]}</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${n}</div>
+        <div style="font-size:.72rem;color:var(--text-muted)">${fmt}</div>
+      </div>`).join('') +
+    `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;text-align:center;min-width:80px">
+        <div style="font-size:1.4rem">📦</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--gold)">${_collection.length}</div>
+        <div style="font-size:.72rem;color:var(--text-muted)">Total</div>
+      </div>`;
+}
+
+function setCollectionFilter(fmt, btn) {
+  _collectionFilter = fmt;
+  document.querySelectorAll('#collectionFilterBar button').forEach(b => {
+    b.classList.remove('tag--gold'); b.classList.add('tag');
+  });
+  btn.classList.add('tag--gold'); btn.classList.remove('tag');
+  renderCollection();
+}
+
+function renderCollection() {
+  const el = document.getElementById('collectionGrid');
+  const isOwner = auth.getUser()?.username?.toLowerCase() === _profileUser?.username?.toLowerCase();
+  const filtered = _collectionFilter === 'all'
+    ? _collection
+    : _collection.filter(i => i.format === _collectionFilter);
+
+  if (!filtered.length) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:2.5rem;margin-bottom:12px">${_collectionFilter === 'all' ? '📦' : FORMAT_ICON[_collectionFilter] || '📦'}</div>
+        <div style="font-size:.9rem">${_collection.length ? 'No ' + _collectionFilter + ' records yet.' : (isOwner ? 'Your collection is empty. Add your first record!' : 'No physical collection yet.')}</div>
+        ${isOwner ? `<button class="btn btn--gold btn--sm" style="margin-top:16px" onclick="openCollectionSearch()">Add Record</button>` : ''}
+      </div>`;
+    return;
+  }
+
+  // Group by format
+  const groups = {};
+  filtered.forEach(item => {
+    if (!groups[item.format]) groups[item.format] = [];
+    groups[item.format].push(item);
+  });
+
+  el.innerHTML = Object.entries(groups).map(([fmt, items]) => `
+    <div style="margin-bottom:32px">
+      <h3 style="font-size:.9rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">
+        ${FORMAT_ICON[fmt] || ''} ${fmt} <span style="font-weight:400">(${items.length})</span>
+      </h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">
+        ${items.map(item => collectionCard(item, isOwner)).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function collectionCard(item, isOwner) {
+  const artwork = item.artwork_url
+    ? `<img src="${escHtml(item.artwork_url)}" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm) var(--radius-sm) 0 0" onerror="this.style.display='none'">`
+    : `<div style="width:100%;aspect-ratio:1;background:var(--bg-raised);border-radius:var(--radius-sm) var(--radius-sm) 0 0;display:flex;align-items:center;justify-content:center;font-size:2rem">${FORMAT_ICON[item.format] || '📦'}</div>`;
+
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;transition:var(--transition)"
+      onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'"
+      onclick="${isOwner ? `openCollectionDetail(${item.id})` : item.discogs_url ? `window.open('${escHtml(item.discogs_url)}','_blank')` : ''}">
+      ${artwork}
+      <div style="padding:10px">
+        <div style="font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(item.title)}">${escHtml(item.title)}</div>
+        <div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(item.artist)}</div>
+        ${item.year ? `<div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">${item.year}</div>` : ''}
+        ${item.condition ? `<div style="font-size:.68rem;color:var(--gold);margin-top:4px;font-weight:600">${escHtml(item.condition)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Collection search modal ──────────────────────────────────
+
+function openCollectionSearch() {
+  if (!auth.isLoggedIn()) { openAuthModal('login'); return; }
+  document.getElementById('collectionSearchModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('collectionSearchInput').value = '';
+  document.getElementById('collectionSearchResults').innerHTML =
+    `<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:.875rem">Search Discogs to find vinyl, CDs, and cassettes.</div>`;
+  setTimeout(() => document.getElementById('collectionSearchInput').focus(), 50);
+}
+
+function closeCollectionSearch() {
+  document.getElementById('collectionSearchModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function setCollectionSearchFmt(fmt, btn) {
+  _collSearchFmt = fmt;
+  document.querySelectorAll('#collectionSearchModal .tag').forEach(b => {
+    b.classList.remove('tag--gold'); b.classList.add('tag');
+  });
+  btn.classList.add('tag--gold'); btn.classList.remove('tag');
+  const q = document.getElementById('collectionSearchInput').value.trim();
+  if (q) runCollectionSearch(q);
+}
+
+function scheduleCollectionSearch(q) {
+  clearTimeout(_collSearchTimer);
+  if (!q.trim()) return;
+  _collSearchTimer = setTimeout(() => runCollectionSearch(q.trim()), 400);
+}
+
+async function runCollectionSearch(q) {
+  const el = document.getElementById('collectionSearchResults');
+  el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.875rem">Searching Discogs…</div>`;
+  try {
+    const results = await api.get(`/api/discogs/search?q=${encodeURIComponent(q)}&format=${_collSearchFmt}`);
+    if (!results.length) {
+      el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.875rem">No results found. Try a different search.</div>`;
+      return;
+    }
+    el.innerHTML = results.map((r, i) => {
+      const fmt = r.format || 'Vinyl';
+      const fmtIcon = FORMAT_ICON[fmt] || FORMAT_ICON[Object.keys(FORMAT_ICON).find(k => fmt.toLowerCase().includes(k.toLowerCase()))] || '📦';
+      return `
+        <div style="display:flex;gap:12px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--bg-card);transition:var(--transition)"
+          onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'"
+          onclick="addDiscogsToCollection(${i})">
+          ${r.artworkUrl
+            ? `<img src="${escHtml(r.artworkUrl)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:var(--radius-sm);flex-shrink:0" onerror="this.style.display='none'">`
+            : `<div style="width:56px;height:56px;background:var(--bg-raised);border-radius:var(--radius-sm);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.6rem">${fmtIcon}</div>`}
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(r.title)}</div>
+            <div style="font-size:.75rem;color:var(--text-muted)">${escHtml(r.artist || '')}${r.year ? ' · ' + r.year : ''}</div>
+            <div style="font-size:.7rem;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">
+              <span class="tag" style="font-size:.65rem;padding:2px 6px">${fmtIcon} ${escHtml(fmt)}${r.formatDetail ? ' · ' + escHtml(r.formatDetail) : ''}</span>
+              ${r.label ? `<span class="tag" style="font-size:.65rem;padding:2px 6px">${escHtml(r.label)}</span>` : ''}
+              ${r.country ? `<span class="tag" style="font-size:.65rem;padding:2px 6px">${escHtml(r.country)}</span>` : ''}
+            </div>
+          </div>
+          <div style="flex-shrink:0;align-self:center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+        </div>`;
+    }).join('');
+    window._collSearchResults = results;
+  } catch (err) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--coral);font-size:.875rem">${escHtml(err.message)}</div>`;
+  }
+}
+
+async function addDiscogsToCollection(idx) {
+  const r = window._collSearchResults?.[idx];
+  if (!r) return;
+  const fmt = r.format || 'Vinyl';
+  const normalized = ['Vinyl','CD','Cassette'].find(f => fmt.toLowerCase().includes(f.toLowerCase())) || 'Vinyl';
+  try {
+    await api.post('/api/collection', {
+      discogsId:    r.discogsId,
+      title:        r.title,
+      artist:       r.artist,
+      format:       normalized,
+      formatDetail: r.formatDetail || '',
+      year:         r.year || null,
+      label:        r.label || '',
+      catalogNumber: r.catalogNumber || '',
+      artworkUrl:   r.artworkUrl || '',
+      discogsUrl:   r.discogsUrl || '',
+    });
+    showToast(`Added "${r.title}" to your collection!`);
+    closeCollectionSearch();
+    loadCollection();
+  } catch (err) {
+    showToast('Could not add: ' + err.message);
+  }
+}
+
+// ── Collection detail / edit modal ──────────────────────────
+
+function openCollectionDetail(itemId) {
+  const item = _collection.find(i => i.id === itemId);
+  if (!item) return;
+  _collDetailId = itemId;
+
+  document.getElementById('collDetailTitle').textContent = item.title;
+  document.getElementById('collDetailCondition').value = item.condition || '';
+  document.getElementById('collDetailNotes').value = item.notes || '';
+
+  const artEl = document.getElementById('collDetailArt');
+  artEl.innerHTML = `
+    ${item.artwork_url ? `<img src="${escHtml(item.artwork_url)}" style="width:72px;height:72px;object-fit:cover;border-radius:var(--radius-sm);flex-shrink:0" onerror="this.style.display='none'">` : ''}
+    <div>
+      <div style="font-weight:700;font-size:.9rem">${escHtml(item.title)}</div>
+      <div style="font-size:.8rem;color:var(--text-muted)">${escHtml(item.artist)}</div>
+      <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">${FORMAT_ICON[item.format] || ''} ${escHtml(item.format)}${item.format_detail ? ' · ' + escHtml(item.format_detail) : ''}${item.year ? ' · ' + item.year : ''}</div>
+      ${item.label ? `<div style="font-size:.72rem;color:var(--text-muted)">${escHtml(item.label)}${item.catalog_number ? ' · ' + escHtml(item.catalog_number) : ''}</div>` : ''}
+      ${item.discogs_url ? `<a href="${escHtml(item.discogs_url)}" target="_blank" rel="noopener" style="font-size:.72rem;color:var(--gold)">View on Discogs ↗</a>` : ''}
+    </div>`;
+
+  document.getElementById('collectionDetailModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCollectionDetail() {
+  document.getElementById('collectionDetailModal').style.display = 'none';
+  document.body.style.overflow = '';
+  _collDetailId = null;
+}
+
+async function saveCollectionDetail() {
+  if (!_collDetailId) return;
+  const condition = document.getElementById('collDetailCondition').value.trim();
+  const notes     = document.getElementById('collDetailNotes').value.trim();
+  try {
+    await api.patch(`/api/collection/${_collDetailId}`, { condition, notes });
+    showToast('Saved!');
+    closeCollectionDetail();
+    loadCollection();
+  } catch (err) {
+    showToast('Could not save: ' + err.message);
+  }
+}
+
+async function removeCollectionItem() {
+  if (!_collDetailId) return;
+  const item = _collection.find(i => i.id === _collDetailId);
+  if (!confirm(`Remove "${item?.title}" from your collection?`)) return;
+  try {
+    await api.delete(`/api/collection/${_collDetailId}`);
+    showToast('Removed from collection.');
+    closeCollectionDetail();
+    loadCollection();
+  } catch (err) {
+    showToast('Could not remove: ' + err.message);
+  }
 }
 </script>
 </body>
